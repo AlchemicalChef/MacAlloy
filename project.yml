@@ -1,0 +1,106 @@
+name: AlloyMac
+options:
+  bundleIdPrefix: com.alloy
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "15.0"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+
+targets:
+  AlloyMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: AlloyMac
+        excludes:
+          - "**/*.md"
+    settings:
+      base:
+        INFOPLIST_FILE: AlloyMac/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.alloy.AlloyMac
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        DEVELOPMENT_TEAM: ""
+        CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_PREVIEWS: YES
+        ENABLE_HARDENED_RUNTIME: YES
+    info:
+      path: AlloyMac/Info.plist
+      properties:
+        CFBundleDisplayName: Alloy
+        CFBundleName: AlloyMac
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        LSMinimumSystemVersion: "$(MACOSX_DEPLOYMENT_TARGET)"
+        NSPrincipalClass: NSApplication
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Alloy Source
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Owner
+            LSItemContentTypes:
+              - com.alloy.source
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.alloy.source
+            UTTypeDescription: Alloy Source File
+            UTTypeConformsTo:
+              - public.source-code
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - als
+    entitlements:
+      path: AlloyMac/AlloyMac.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.files.user-selected.read-write: true
+
+  AlloyMacTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: AlloyMacTests
+    dependencies:
+      - target: AlloyMac
+    settings:
+      base:
+        INFOPLIST_FILE: AlloyMacTests/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.alloy.AlloyMacTests
+
+  AlloyMacUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: AlloyMacUITests
+    dependencies:
+      - target: AlloyMac
+    settings:
+      base:
+        INFOPLIST_FILE: AlloyMacUITests/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.alloy.AlloyMacUITests
+        TEST_TARGET_NAME: AlloyMac
+
+schemes:
+  AlloyMac:
+    build:
+      targets:
+        AlloyMac: all
+        AlloyMacTests: [test]
+        AlloyMacUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - AlloyMacTests
+        - AlloyMacUITests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
