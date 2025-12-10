@@ -21,6 +21,16 @@ struct ContentView: View {
     @State private var pendingRecentFileURL: URL?
     @State private var isDroppingFile = false
 
+    // Find All References state
+    @State private var showReferencesPanel = false
+    @State private var referencesSymbolName = ""
+    @State private var references: [Reference] = []
+
+    // Rename Symbol state
+    @State private var showRenameDialog = false
+    @State private var renameSymbolName = ""
+    @State private var renameReferences: [Reference] = []
+
     /// Pending action after unsaved changes confirmation
     enum PendingAction {
         case new
@@ -47,6 +57,26 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showScopeConfig) {
             scopeConfigSheet
+        }
+        .sheet(isPresented: $showRenameDialog) {
+            RenameSymbolDialog(
+                originalName: renameSymbolName,
+                referenceCount: renameReferences.count,
+                onRename: { newName in
+                    // Apply the rename
+                    let newSource = ReferenceSearchService.applyRename(
+                        from: renameSymbolName,
+                        to: newName,
+                        references: renameReferences,
+                        in: document.sourceCode
+                    )
+                    document.sourceCode = newSource
+                    showRenameDialog = false
+                },
+                onCancel: {
+                    showRenameDialog = false
+                }
+            )
         }
         .fileImporter(
             isPresented: $showOpenPicker,
@@ -331,6 +361,16 @@ struct ContentView: View {
                 RecentFilesMenu(onFileSelected: openRecentFile)
             }
 
+            // Document Outline
+            if let symbolTable = document.symbolTable {
+                Section("Outline") {
+                    OutlineView(symbolTable: symbolTable) { span in
+                        scrollTarget = span
+                        selectedTab = .editor
+                    }
+                }
+            }
+
             Section("Status") {
                 HStack {
                     if document.isAnalyzing || document.isSolving {
@@ -367,16 +407,46 @@ struct ContentView: View {
             // Content area
             switch selectedTab {
             case .editor:
-                EditorView(
-                    text: $document.sourceCode,
-                    diagnostics: document.diagnostics,
-                    scrollToLocation: scrollTarget
-                )
-                .onChange(of: scrollTarget) { _, _ in
-                    // Clear scroll target after a brief delay to allow re-triggering
-                    Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 100_000_000)
-                        scrollTarget = nil
+                VStack(spacing: 0) {
+                    EditorView(
+                        text: $document.sourceCode,
+                        diagnostics: document.diagnostics,
+                        scrollToLocation: scrollTarget,
+                        symbolTable: document.symbolTable,
+                        onGoToDefinition: { span in
+                            scrollTarget = span
+                        },
+                        onFindReferences: { symbolName, refs in
+                            referencesSymbolName = symbolName
+                            references = refs
+                            showReferencesPanel = true
+                        },
+                        onRenameSymbol: { symbolName, refs in
+                            renameSymbolName = symbolName
+                            renameReferences = refs
+                            showRenameDialog = true
+                        }
+                    )
+                    .onChange(of: scrollTarget) { _, _ in
+                        // Clear scroll target after a brief delay to allow re-triggering
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 100_000_000)
+                            scrollTarget = nil
+                        }
+                    }
+
+                    // References panel
+                    if showReferencesPanel {
+                        ReferencesPanel(
+                            symbolName: referencesSymbolName,
+                            references: references,
+                            onNavigate: { span in
+                                scrollTarget = span
+                            },
+                            onClose: {
+                                showReferencesPanel = false
+                            }
+                        )
                     }
                 }
             case .instances:
