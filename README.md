@@ -1,6 +1,8 @@
 # MacAlloy
 
-A native macOS and iPad IDE for [Alloy 6.2](https://alloytools.org/), a declarative language for modeling and analyzing software systems.
+A native macOS IDE for [Alloy 6.2](https://alloytools.org/), a declarative language for modeling and analyzing software systems.
+
+[![Build](https://github.com/yourusername/MacAlloy/actions/workflows/build.yml/badge.svg)](https://github.com/yourusername/MacAlloy/actions/workflows/build.yml)
 
 ## Features
 
@@ -39,13 +41,9 @@ The app includes five main views:
 
 ## Requirements
 
-### macOS
 - macOS 14.0+
 - Xcode 15.0+
-
-### iPad
-- iOS 17.0+
-- iPad (optimized for landscape and portrait)
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (for generating the Xcode project)
 
 ## Building
 
@@ -54,11 +52,14 @@ The app includes five main views:
 git clone https://github.com/yourusername/MacAlloy.git
 cd MacAlloy
 
-# Build macOS version
-xcodebuild -project AlloyMac.xcodeproj -scheme AlloyMac -destination 'platform=macOS'
+# Install XcodeGen (if not already installed)
+brew install xcodegen
 
-# Build iPad version
-xcodebuild -project AlloyiPad.xcodeproj -scheme AlloyiPad -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M4)'
+# Generate the Xcode project
+xcodegen generate
+
+# Build
+xcodebuild -scheme AlloyMac -destination 'platform=macOS' build
 ```
 
 ## Architecture
@@ -182,11 +183,11 @@ run CanBecomeHappy for 3 Person, 5 steps
 ## Testing
 
 ```bash
-# Run macOS tests
-xcodebuild test -project AlloyMac.xcodeproj -scheme AlloyMac -destination 'platform=macOS'
+# Generate the project first (if not already done)
+xcodegen generate
 
-# Run iPad tests
-xcodebuild test -project AlloyiPad.xcodeproj -scheme AlloyiPad -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M4)'
+# Run tests
+xcodebuild test -scheme AlloyMac -destination 'platform=macOS'
 ```
 
 ## License
