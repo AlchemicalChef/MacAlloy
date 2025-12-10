@@ -3,11 +3,12 @@ name: Build
 on:
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
 
 jobs:
-  build-macos:
+  build:
     runs-on: macos-15
 
     steps:
@@ -19,7 +20,8 @@ jobs:
     - name: Generate Xcode Project
       run: xcodegen generate
 
-    - name: Build
+    - name: Build Debug
+      if: "!startsWith(github.ref, 'refs/tags/')"
       run: |
         xcodebuild -scheme AlloyMac \
           -destination 'platform=macOS' \
@@ -29,7 +31,36 @@ jobs:
           CODE_SIGNING_REQUIRED=NO \
           CODE_SIGNING_ALLOWED=NO
 
+    - name: Build Release
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        xcodebuild -scheme AlloyMac \
+          -destination 'platform=macOS' \
+          -configuration Release \
+          -derivedDataPath ./build \
+          clean build \
+          CODE_SIGN_IDENTITY="-" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO
+
+    - name: Package App
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        cd ./build/Build/Products/Release
+        zip -r AlloyMac.zip AlloyMac.app
+        mv AlloyMac.zip $GITHUB_WORKSPACE/
+
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: AlloyMac.zip
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Run Tests
+      if: "!startsWith(github.ref, 'refs/tags/')"
       run: |
         xcodebuild test \
           -scheme AlloyMac \
@@ -38,4 +69,4 @@ jobs:
           CODE_SIGN_IDENTITY="" \
           CODE_SIGNING_REQUIRED=NO \
           CODE_SIGNING_ALLOWED=NO \
-          || true  # Don't fail if no tests exist yet
+          || true
