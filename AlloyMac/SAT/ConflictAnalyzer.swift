@@ -87,8 +87,9 @@ public final class ConflictAnalyzer: @unchecked Sendable {
             currentLiteral = nil
 
             // Find next literal on trail at current level that's been seen
-            trailIndex -= 1
-            while trailIndex >= 0 {
+            // Check bounds BEFORE decrementing to avoid off-by-one errors
+            while trailIndex > 0 {
+                trailIndex -= 1
                 let assignment = trail.assignment(at: trailIndex)
                 if seen[Int(assignment.variable.index)] && trail.level(of: assignment.variable) == trail.currentLevel {
                     currentLiteral = assignment.value ?
@@ -96,7 +97,6 @@ public final class ConflictAnalyzer: @unchecked Sendable {
                         Literal(variable: assignment.variable, isNegated: true)
                     break
                 }
-                trailIndex -= 1
             }
 
             guard let lit = currentLiteral else { break }
@@ -162,22 +162,30 @@ public final class ConflictAnalyzer: @unchecked Sendable {
         }
 
         // Compute backtrack level (second highest level in learned clause)
-        // Position 0 is the UIP (asserting literal), so we find the highest level among positions 1..n
+        // Position 0 is the UIP (asserting literal), so we find the second-highest level among positions 1..n
+        // This is critical for 1-UIP: we backtrack to the second-highest level, not the highest
         var backtrackLevel = 0
         if learntLiterals.count > 1 {
-            // Find the highest level among all literals except the UIP at position 0
+            // Find the highest and second-highest levels among all literals except the UIP at position 0
             var maxLevel = 0
+            var secondMaxLevel = 0
             var maxIdx = 1
+
             for i in 1..<learntLiterals.count {
                 let level = trail.level(of: learntLiterals[i].variable)
                 if level > maxLevel {
+                    secondMaxLevel = maxLevel  // Previous max becomes second max
                     maxLevel = level
                     maxIdx = i
+                } else if level > secondMaxLevel {
+                    secondMaxLevel = level
                 }
             }
-            backtrackLevel = maxLevel
 
-            // Swap to position 1 for watched literal setup
+            // Backtrack to second-highest level (not the highest!)
+            backtrackLevel = secondMaxLevel
+
+            // Swap the highest-level literal to position 1 for watched literal setup
             if maxIdx != 1 {
                 learntLiterals.swapAt(1, maxIdx)
             }

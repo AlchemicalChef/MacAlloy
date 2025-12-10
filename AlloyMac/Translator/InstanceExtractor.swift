@@ -158,8 +158,16 @@ public struct InstanceExtractor {
             case .constant(let b):
                 isTrue = b
             case .variable(let v):
-                let idx = Int(abs(v))
-                let varValue = idx < solution.count ? solution[idx] : false
+                // SAT variables are 1-indexed, solution array is 0-indexed
+                // v can be negative (negated literal), so use abs(v)
+                let varIndex = Int(abs(v))
+                // Validate bounds: varIndex must be > 0 (1-indexed) and within solution array
+                guard varIndex > 0 && varIndex < solution.count else {
+                    // Out of bounds - treat as false (should not happen in valid solutions)
+                    isTrue = false
+                    continue
+                }
+                let varValue = solution[varIndex]
                 isTrue = v > 0 ? varValue : !varValue
             }
 

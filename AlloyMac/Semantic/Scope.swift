@@ -163,12 +163,16 @@ public final class Scope: @unchecked Sendable {
         var scope: Scope? = self
         while let s = scope {
             if s.kind == .signature {
-                // Find the sig symbol that owns this scope
-                for sym in s.parent?.localSymbols ?? [] {
-                    if let sig = sym as? SigSymbol {
-                        return sig
+                // Find the sig symbol that owns this scope by looking at parent's symbols
+                // The signature symbol is defined in the parent (module) scope
+                if let parentScope = s.parent {
+                    for sym in parentScope.localSymbols {
+                        if let sig = sym as? SigSymbol {
+                            return sig
+                        }
                     }
                 }
+                return nil
             }
             scope = s.parent
         }

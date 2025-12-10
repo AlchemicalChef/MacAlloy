@@ -203,7 +203,7 @@ extension SemanticAnalyzer {
         let predScope = symbolTable.enterScope(.predicate)
         predScope.node = predDecl
 
-        // Collect parameters
+        // Collect parameters (they are registered in the scope during collectParams)
         for paramDecl in predDecl.params {
             collectParams(paramDecl, into: &sym.parameters)
         }
@@ -534,25 +534,20 @@ final class TypeChecker: @unchecked Sendable {
                 checkFormula(fact.body)
             } else if let pred = paragraph as? PredDeclNode {
                 if let body = pred.body {
-                    // Enter predicate scope and register parameters
-                    _ = symbolTable.enterScope(.predicate)
+                    // Use the scope created during collection phase
+                    // Look up the predicate symbol to find its scope
+                    if let predSym = symbolTable.lookupPred(pred.predName.name) {
+                        _ = symbolTable.enterScope(.predicate)
 
-                    // Register parameters
-                    for paramDecl in pred.params {
-                        let paramType = inferType(paramDecl.typeExpr)
-                        for name in paramDecl.names {
-                            let paramSym = ParamSymbol(
-                                name: name.name,
-                                type: paramType,
-                                definedAt: name.span,
-                                isDisjoint: paramDecl.isDisjoint
-                            )
+                        // Parameters were already registered during collection phase
+                        // Re-register them in this scope for type checking
+                        for paramSym in predSym.parameters {
                             symbolTable.registerParam(paramSym)
                         }
-                    }
 
-                    checkFormula(body)
-                    symbolTable.exitScope()
+                        checkFormula(body)
+                        symbolTable.exitScope()
+                    }
                 }
             } else if let assert = paragraph as? AssertDeclNode {
                 checkFormula(assert.body)
@@ -823,7 +818,9 @@ final class TypeChecker: @unchecked Sendable {
             var resultType = checkExpr(boxJoin.left)
             for arg in boxJoin.args {
                 let argType = checkExpr(arg)
-                if let joined = argType.join(with: resultType) {
+                // Box join: left[arg] is equivalent to arg.left
+                // So we join arg with current result
+                if let joined = resultType.join(with: argType) {
                     resultType = joined
                 } else {
                     diagnostics.error(.invalidJoin,

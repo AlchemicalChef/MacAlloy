@@ -135,6 +135,7 @@ public protocol ASTVisitor {
     func visit(_ node: BinaryExpr) -> Result
     func visit(_ node: UnaryExpr) -> Result
     func visit(_ node: MultExpr) -> Result
+    func visit(_ node: ArrowExpr) -> Result
     func visit(_ node: CallExpr) -> Result
     func visit(_ node: BoxJoinExpr) -> Result
     func visit(_ node: ComprehensionExpr) -> Result
@@ -187,6 +188,10 @@ public extension ASTVisitor where Result == Void {
     }
     func visit(_ node: UnaryExpr) { node.operand.accept(self) }
     func visit(_ node: MultExpr) { node.expr.accept(self) }
+    func visit(_ node: ArrowExpr) {
+        node.left.accept(self)
+        node.right.accept(self)
+    }
     func visit(_ node: CallExpr) { node.args.forEach { $0.accept(self) } }
     func visit(_ node: BoxJoinExpr) {
         node.left.accept(self)

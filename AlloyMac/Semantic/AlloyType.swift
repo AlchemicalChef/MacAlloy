@@ -54,10 +54,13 @@ public struct IntType: AlloyType {
     }
 
     public func join(with other: AlloyType) -> AlloyType? {
-        guard other.arity >= 1 else { return nil }
-        if other.arity == 1 { return nil }
+        guard other.arity >= 2 else { return nil }
         // Join with n-ary relation gives (n-1)-ary relation
-        return UnknownType(arity: other.arity - 1)
+        let resultArity = other.arity - 1
+        if resultArity == 1 {
+            return UnknownType(arity: 1)
+        }
+        return UnknownType(arity: resultArity)
     }
 
     public func product(with other: AlloyType) -> AlloyType {
@@ -160,7 +163,7 @@ public struct RelationType: AlloyType {
     }
 
     public func join(with other: AlloyType) -> AlloyType? {
-        guard let otherRel = other as? RelationType, arity >= 1 else {
+        guard arity >= 1 else {
             return nil
         }
         // a.b where a has arity m and b has arity n gives arity (m + n - 2)
@@ -171,11 +174,25 @@ public struct RelationType: AlloyType {
         var resultCols: [any AlloyType] = []
         // Take all but last from self
         resultCols.append(contentsOf: columnTypes.dropLast())
+
         // Take all but first from other
-        resultCols.append(contentsOf: otherRel.columnTypes.dropFirst())
+        if let otherRel = other as? RelationType {
+            resultCols.append(contentsOf: otherRel.columnTypes.dropFirst())
+        } else if other.arity > 0 {
+            // For non-RelationType with arity > 0, treat as unary relation
+            // After dropping first column, nothing remains if arity is 1
+            if other.arity > 1 {
+                // Use UnknownType for remaining columns
+                for _ in 1..<other.arity {
+                    resultCols.append(UnknownType(arity: 1))
+                }
+            }
+        }
 
         if resultCols.count == 1 {
             return resultCols[0]
+        } else if resultCols.count == 0 {
+            return nil
         }
         return RelationType(columnTypes: resultCols)
     }
@@ -252,7 +269,15 @@ public struct IdenType: AlloyType {
     }
 
     public func join(with other: AlloyType) -> AlloyType? {
-        other // iden.x = x
+        // iden.x = x (identity relation joined with x gives x)
+        // But if x is unary, we should keep it unary; if x is n-ary, result is (n-1)-ary
+        if other.arity == 1 {
+            return other
+        } else if other.arity > 1 {
+            // Join iden (arity 2) with n-ary gives (n-1)-ary
+            return UnknownType(arity: other.arity - 1)
+        }
+        return nil
     }
 
     public func product(with other: AlloyType) -> AlloyType {
@@ -271,7 +296,11 @@ public struct UnknownType: AlloyType {
     }
 
     public func isSubtypeOf(_ other: AlloyType) -> Bool {
-        true // Unknown is compatible with anything
+        // Unknown types should only be compatible during type inference, not for real type checks
+        // In a real type system, we'd want to return false for actual checks
+        // For now, we remain permissive to allow incomplete type inference
+        // TODO: Add context to distinguish inference from validation
+        true // Unknown is compatible with anything during inference
     }
 
     public func join(with other: AlloyType) -> AlloyType? {

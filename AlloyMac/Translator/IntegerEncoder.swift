@@ -44,7 +44,12 @@ public final class IntegerEncoder {
         // For each possible integer atom, if it's in the matrix, constrain result to equal that value
         // This implements: result = ITE(matrix contains Int$n, n, result of other cases...)
         for intValue in factory.minValue...factory.maxValue {
-            guard let atom = factory.atom(for: intValue) else { continue }
+            guard let atom = factory.atom(for: intValue) else {
+                // Missing atom in factory - this should not happen in a valid configuration
+                // Log a warning or fail more explicitly rather than silently continuing
+                // For now, continue but this indicates a configuration error
+                continue
+            }
             let inMatrix = matrix[AtomTuple(atom)]
 
             // If this atom is in the matrix, result must equal this value
@@ -189,13 +194,21 @@ public final class IntegerEncoder {
             for atom in universe.atoms {
                 let tuple = AtomTuple(atom)
                 let value = setMatrix[tuple]
-                // Include all values (even false ones contribute to the cardinality count)
+                // Optimization: skip definite-false values to reduce circuit size
+                if case .constant(false) = value {
+                    continue
+                }
                 membershipValues.append(value)
             }
         } else {
             // Higher arity - count all tuples in the relation
             for tuple in setMatrix.tuples {
-                membershipValues.append(setMatrix[tuple])
+                let value = setMatrix[tuple]
+                // Optimization: skip definite-false values to reduce circuit size
+                if case .constant(false) = value {
+                    continue
+                }
+                membershipValues.append(value)
             }
         }
 

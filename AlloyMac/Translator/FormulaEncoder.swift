@@ -172,17 +172,17 @@ public final class FormulaEncoder {
 
             if !valid { continue }
 
-            // Bind this variable
-            context.pushScope()
-            context.bind(name, to: context.atomMatrix(atom))
-
             // Update disjoint sets
             var newDisjointSets = disjointSets
             if isDisjoint {
                 newDisjointSets[name, default: []].insert(atom)
             }
 
-            // Recurse
+            // Bind this variable in a new scope
+            context.pushScope()
+            context.bind(name, to: context.atomMatrix(atom))
+
+            // Recurse with the binding active
             let subFormula = encodeQuantifierRecursive(
                 quantifier: quantifier,
                 decls: remainingDecls,
@@ -190,6 +190,7 @@ public final class FormulaEncoder {
                 disjointSets: newDisjointSets
             )
 
+            // Pop scope AFTER using the formula result
             context.popScope()
 
             // Include membership constraint

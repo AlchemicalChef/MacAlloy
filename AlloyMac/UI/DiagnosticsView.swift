@@ -46,10 +46,10 @@ public struct DiagnosticsView: View {
 
             if !errors.isEmpty {
                 Section {
-                    ForEach(errors.indices, id: \.self) { index in
-                        DiagnosticRow(diagnostic: errors[index])
+                    ForEach(Array(errors.enumerated()), id: \.offset) { index, error in
+                        DiagnosticRow(diagnostic: error)
                             .onTapGesture {
-                                onDiagnosticTap?(errors[index])
+                                onDiagnosticTap?(error)
                             }
                     }
                 } header: {
@@ -60,10 +60,10 @@ public struct DiagnosticsView: View {
 
             if !warnings.isEmpty {
                 Section {
-                    ForEach(warnings.indices, id: \.self) { index in
-                        DiagnosticRow(diagnostic: warnings[index])
+                    ForEach(Array(warnings.enumerated()), id: \.offset) { index, warning in
+                        DiagnosticRow(diagnostic: warning)
                             .onTapGesture {
-                                onDiagnosticTap?(warnings[index])
+                                onDiagnosticTap?(warning)
                             }
                     }
                 } header: {
@@ -74,10 +74,10 @@ public struct DiagnosticsView: View {
 
             if !infos.isEmpty {
                 Section {
-                    ForEach(infos.indices, id: \.self) { index in
-                        DiagnosticRow(diagnostic: infos[index])
+                    ForEach(Array(infos.enumerated()), id: \.offset) { index, info in
+                        DiagnosticRow(diagnostic: info)
                             .onTapGesture {
-                                onDiagnosticTap?(infos[index])
+                                onDiagnosticTap?(info)
                             }
                     }
                 } header: {

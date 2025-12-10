@@ -107,7 +107,13 @@ public final class LTLEncoder {
             return .disjunction(disjuncts)
         }
 
-        // Lasso trace: F holds somewhere in [state, length-1] OR in the loop portion
+        // Lasso trace: F holds somewhere in the future
+        // The future from state s includes:
+        // 1. States [s, length-1]
+        // 2. If loop target l <= s, then the loop portion [l, s-1] is NOT in the future
+        // 3. If loop target l > s, then states [loopTarget, length-1] ARE in the future (already covered in step 1)
+        // Corrected semantics: The future is [state, length-1] AND if loop goes to l < state,
+        // then [l, state-1] are NOT reachable in the future from state s
         var disjuncts: [BooleanFormula] = []
 
         // F at some state in [state, length-1]
@@ -115,7 +121,8 @@ public final class LTLEncoder {
             disjuncts.append(formula(i))
         }
 
-        // If loop goes to l < state, F could also hold in [l, state-1]
+        // For loop-back: if we loop to l and l < state, then states [l, state-1] are also in the future
+        // This is correct: after reaching the end, we loop back to l, and from l we can reach [l, state-1]
         for l in 0..<state {
             let loopsToL = trace.loopsTo(l)
             for i in l..<state {

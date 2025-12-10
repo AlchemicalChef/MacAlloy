@@ -322,6 +322,46 @@ public final class BlockExpr: ExprNode {
     }
 }
 
+// MARK: - Arrow Expression
+
+/// Arrow product expression with optional multiplicities: A [mult] -> [mult] B
+/// Supports syntax like: A -> B, A -> lone B, A some -> one B
+public final class ArrowExpr: ExprNode {
+    public let id = ASTNodeID()
+    public let span: SourceSpan
+
+    public var left: any ExprNode
+    public var leftMult: Multiplicity?   // Optional multiplicity before ->
+    public var rightMult: Multiplicity?  // Optional multiplicity after ->
+    public var right: any ExprNode
+
+    public init(span: SourceSpan,
+                left: any ExprNode,
+                leftMult: Multiplicity? = nil,
+                rightMult: Multiplicity? = nil,
+                right: any ExprNode) {
+        self.span = span
+        self.left = left
+        self.leftMult = leftMult
+        self.rightMult = rightMult
+        self.right = right
+    }
+
+    public var children: [any ASTNode] { [left, right] }
+    public var description: String {
+        var result = "\(left)"
+        if let lm = leftMult { result += " \(lm.rawValue)" }
+        result += " ->"
+        if let rm = rightMult { result += " \(rm.rawValue)" }
+        result += " \(right)"
+        return result
+    }
+
+    public func accept<V: ASTVisitor>(_ visitor: V) -> V.Result {
+        visitor.visit(self)
+    }
+}
+
 // MARK: - Multiplicity Expression
 
 /// Multiplicity-qualified type expression (for field types)

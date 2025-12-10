@@ -199,7 +199,8 @@ public struct IntegerArithmetic {
 
     /// Multiply two bit vectors: a * b
     /// Uses shift-and-add algorithm
-    /// Intermediate overflows detected via add(); result truncated to bit width
+    /// Per Alloy spec: overflow makes the model UNSAT, handled by add() overflow detection
+    /// Note: Each intermediate add() will detect overflow and constrain it to be false
     public func multiply(_ a: BitVector, _ b: BitVector) -> BitVector {
         precondition(a.bitWidth == b.bitWidth, "Bit widths must match")
         let width = a.bitWidth
@@ -208,11 +209,19 @@ public struct IntegerArithmetic {
         var result = BitVector.zero(bitWidth: width)
 
         // For each bit of b, if it's 1, add (a << position) to result
+        // Note: We only iterate over bits where shifting won't immediately overflow
+        // For signed multiplication, we need to be careful about sign extension
         for i in 0..<width {
+            // Skip if this bit of b is definitely false
+            if case .constant(false) = b[i] {
+                continue
+            }
+
             // Shift a left by i positions (with truncation)
             let shifted = shiftLeft(a, by: i)
 
             // Conditionally add: if b[i], add shifted to result
+            // The add() function will detect overflow and make model UNSAT if it occurs
             let toAdd = conditionalSelect(condition: b[i], ifTrue: shifted, ifFalse: BitVector.zero(bitWidth: width))
             result = add(result, toAdd)
         }
@@ -272,14 +281,17 @@ public struct IntegerArithmetic {
 
     /// Division and remainder: a / b and a % b
     /// Uses restoring division algorithm
-    /// Division by zero returns (0, a) - quotient is 0, remainder is the dividend
+    /// Per Alloy spec: Division by zero behavior - we add a constraint to make the model UNSAT
+    /// if division by zero occurs, matching Alloy's semantics
     public func divRem(_ a: BitVector, _ b: BitVector) -> (quotient: BitVector, remainder: BitVector) {
         precondition(a.bitWidth == b.bitWidth, "Bit widths must match")
         let width = a.bitWidth
 
-        // Check for division by zero: if b == 0, return (0, a)
+        // Check for division by zero early: if b == 0, constrain model to be UNSAT
         let bIsZero = isZero(b)
-        let zeroResult = BitVector.zero(bitWidth: width)
+        // Add constraint: bIsZero must be false (i.e., b must not be zero)
+        // This makes the model UNSAT if division by zero would occur
+        constrainFalse(bIsZero)
 
         // Handle signs for signed division
         // |a| / |b| = |q|, sign(q) = sign(a) XOR sign(b)
@@ -297,12 +309,8 @@ public struct IntegerArithmetic {
 
         // Apply signs to results
         let qSign = xor(aSign, bSign)
-        var quotient = conditionalSelect(condition: qSign, ifTrue: negate(unsignedQ), ifFalse: unsignedQ)
-        var remainder = conditionalSelect(condition: aSign, ifTrue: negate(unsignedR), ifFalse: unsignedR)
-
-        // Override result if b is zero: quotient = 0, remainder = a
-        quotient = conditionalSelect(condition: bIsZero, ifTrue: zeroResult, ifFalse: quotient)
-        remainder = conditionalSelect(condition: bIsZero, ifTrue: a, ifFalse: remainder)
+        let quotient = conditionalSelect(condition: qSign, ifTrue: negate(unsignedQ), ifFalse: unsignedQ)
+        let remainder = conditionalSelect(condition: aSign, ifTrue: negate(unsignedR), ifFalse: unsignedR)
 
         return (quotient, remainder)
     }

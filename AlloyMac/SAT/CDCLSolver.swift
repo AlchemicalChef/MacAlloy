@@ -114,10 +114,14 @@ public final class CDCLSolver: @unchecked Sendable {
         }
 
         // Process initial unit clauses
+        // Add them to the clause database first to get valid ClauseRefs
         for unitLit in unitClauses {
             let varValue = trail.value(of: unitLit)
             if varValue == .undefined {
-                trail.propagate(unitLit, reason: .invalid)
+                // Create a unit clause and add it to the database for a valid ClauseRef
+                let unitClause = Clause(literals: [unitLit], isLearned: false)
+                let unitRef = clauseDB.addOriginal(unitClause)
+                trail.propagate(unitLit, reason: unitRef)
             } else if !trail.isSatisfied(unitLit) {
                 // Conflict with unit clause - literal is falsified
                 stats.solveTimeMs = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
@@ -166,16 +170,11 @@ public final class CDCLSolver: @unchecked Sendable {
                 backtrack(to: btLevel)
 
                 // Add learned clause
-                if learnedClause.size == 1 {
-                    // Unit learned clause - propagate immediately
-                    trail.propagate(learnedClause.first, reason: .invalid)
-                } else {
-                    let learnedRef = clauseDB.addLearned(learnedClause)
-                    stats.learnedClauses += 1
+                let learnedRef = clauseDB.addLearned(learnedClause)
+                stats.learnedClauses += 1
 
-                    // The asserting literal becomes unit
-                    trail.propagate(learnedClause.first, reason: learnedRef)
-                }
+                // The asserting literal becomes unit (propagate with valid ClauseRef)
+                trail.propagate(learnedClause.first, reason: learnedRef)
 
                 // Decay activities
                 heuristic.decayActivities()

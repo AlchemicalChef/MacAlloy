@@ -211,7 +211,7 @@ public final class SymbolTable: @unchecked Sendable {
         }
 
         // Try as Sig.field or Sig.pred
-        if let sig = lookupSig(firstName) {
+        if parts.count > 1, let sig = lookupSig(firstName) {
             let secondName = parts[1]
             // Look for field
             for field in sig.allFields {
@@ -257,9 +257,9 @@ public final class SymbolTable: @unchecked Sendable {
         if let field = currentScope.lookupField(name) {
             return field
         }
-        // Then search all signatures in the module
+        // Then search all signatures in the module (including inherited fields)
         for sig in signatures.values {
-            for field in sig.fields {
+            for field in sig.allFields {
                 if field.name == name {
                     return field
                 }

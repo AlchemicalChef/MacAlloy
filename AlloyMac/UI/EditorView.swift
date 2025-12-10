@@ -207,6 +207,25 @@ struct EditorTextView: NSViewRepresentable {
     public func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
 
+        // Clean up old observer if scroll view changed
+        if context.coordinator.scrollView !== scrollView {
+            if let observer = context.coordinator.scrollObserver {
+                NotificationCenter.default.removeObserver(observer)
+                context.coordinator.scrollObserver = nil
+            }
+
+            // Set up new observer for new scroll view
+            context.coordinator.scrollView = scrollView
+            scrollView.contentView.postsBoundsChangedNotifications = true
+            context.coordinator.scrollObserver = NotificationCenter.default.addObserver(
+                forName: NSView.boundsDidChangeNotification,
+                object: scrollView.contentView,
+                queue: .main
+            ) { [weak coordinator = context.coordinator] _ in
+                coordinator?.handleScrollNotification()
+            }
+        }
+
         // Update coordinator references
         context.coordinator.symbolTable = symbolTable
         context.coordinator.onGoToDefinition = onGoToDefinition
@@ -244,6 +263,8 @@ struct EditorTextView: NSViewRepresentable {
               let textContainer = textView.textContainer else { return }
 
         // Calculate the length to highlight
+        // Ensure end is after start to avoid negative length
+        guard span.end.offset >= span.start.offset else { return }
         let length = max(span.end.offset - span.start.offset, 1)
         let safeLength = min(length, text.count - charOffset)
         let range = NSRange(location: charOffset, length: safeLength)
@@ -292,7 +313,8 @@ struct EditorTextView: NSViewRepresentable {
     }
 
     public class Coordinator: NSObject, NSTextViewDelegate {
-        var parent: EditorTextView
+        // Note: EditorTextView is a struct, so no retain cycle risk with parent
+        var parentView: EditorTextView?
         let highlighter: AppKitSyntaxHighlighter
         private var isUpdating = false
         weak var scrollView: NSScrollView?
@@ -318,7 +340,7 @@ struct EditorTextView: NSViewRepresentable {
         private var lastDiagnosticHash: Int = 0
 
         init(_ parent: EditorTextView) {
-            self.parent = parent
+            self.parentView = parent
             self.highlighter = AppKitSyntaxHighlighter(theme: parent.theme)
             super.init()
             setupMouseMonitor()
@@ -351,13 +373,16 @@ struct EditorTextView: NSViewRepresentable {
             // Quick check: if count differs, definitely need update
             // If count same, compute hash of diagnostic data
             let newCount = diagnostics.count
-            var newHash = 0
+            var hasher = Hasher()
             for d in diagnostics {
-                // Combine offset, length, and severity into hash
-                newHash = newHash &* 31 &+ d.span.start.offset
-                newHash = newHash &* 31 &+ d.span.end.offset
-                newHash = newHash &* 31 &+ d.severity.hashValue
+                // Combine all diagnostic fields into hash to avoid collisions
+                hasher.combine(d.span.start.offset)
+                hasher.combine(d.span.end.offset)
+                hasher.combine(d.severity)
+                hasher.combine(d.message)
+                hasher.combine(d.code)
             }
+            let newHash = hasher.finalize()
 
             if newCount == lastDiagnosticCount && newHash == lastDiagnosticHash {
                 return
@@ -464,13 +489,14 @@ struct EditorTextView: NSViewRepresentable {
             let text = textView.string
             let textLength = text.count
 
-            // Validate selectedRange bounds
-            guard selectedRange.location <= textLength else { return "" }
+            // Validate selectedRange bounds - must be within text
+            guard selectedRange.location < textLength else { return "" }
 
             // If there's a selection, use the selected text (if valid)
             if selectedRange.length > 0 {
-                // Ensure selection doesn't extend beyond text
-                guard selectedRange.location + selectedRange.length <= textLength else { return "" }
+                // Ensure selection doesn't extend beyond text and has valid length
+                guard selectedRange.location >= 0,
+                      selectedRange.location + selectedRange.length <= textLength else { return "" }
                 let nsText = text as NSString
                 return nsText.substring(with: selectedRange)
             }
@@ -838,7 +864,8 @@ struct EditorTextView: NSViewRepresentable {
 
         /// Check if a character is valid in an identifier
         private func isIdentifierChar(_ char: unichar) -> Bool {
-            let c = Character(UnicodeScalar(char)!)
+            guard let scalar = UnicodeScalar(char) else { return false }
+            let c = Character(scalar)
             return c.isLetter || c.isNumber || c == "_" || c == "'"
         }
 
@@ -864,7 +891,8 @@ struct EditorTextView: NSViewRepresentable {
 
         public func textDidChange(_ notification: Notification) {
             guard !isUpdating,
-                  let textView = notification.object as? NSTextView else { return }
+                  let textView = notification.object as? NSTextView,
+                  let parent = parentView else { return }
 
             let newText = textView.string
             parent.text = newText

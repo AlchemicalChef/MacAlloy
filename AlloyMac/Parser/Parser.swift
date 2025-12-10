@@ -203,9 +203,22 @@ public final class Parser {
         while !check(.rightBrace) && !isAtEnd {
             if let field = parseFieldDecl() {
                 fields.append(field)
+                // Fields can be separated by comma
+                match(.comma)
+            } else {
+                // Error recovery: if we can't parse a field, report error and skip to next safe point
+                error("Expected field declaration")
+                // Skip tokens until we find comma, right brace, or reach end
+                while !check(.comma) && !check(.rightBrace) && !isAtEnd {
+                    advance()
+                }
+                // If we found a comma, consume it and try parsing next field
+                if match(.comma) {
+                    continue
+                }
+                // Otherwise break (we're at } or EOF)
+                break
             }
-            // Fields can be separated by comma
-            match(.comma)
         }
 
         expect(.rightBrace, "Expected '}' to end signature body")
@@ -665,14 +678,16 @@ public final class Parser {
         // Guard against nil left before entering operator loop
         guard left != nil else { return nil }
 
+        // Store left span before loop to avoid optional chaining issues
+        let leftSpan = left!.span
+
         while match(.doubleArrow) || match(.iff) {
-            let startSpan = left?.span ?? previous.span
             guard let right = parseImpliesFormula() else {
                 error("Expected formula after '<=>'")
                 return left
             }
             left = BinaryFormula(
-                span: SourceSpan(start: startSpan.start, end: previous.span.end),
+                span: SourceSpan(start: leftSpan.start, end: previous.span.end),
                 left: left!,
                 op: .iff,
                 right: right
@@ -689,14 +704,16 @@ public final class Parser {
         // Guard against nil left before entering operator loop
         guard left != nil else { return nil }
 
+        // Store left span before loop to avoid optional chaining issues
+        let leftSpan = left!.span
+
         while match(.fatArrow) || match(.implies) {
-            let startSpan = left?.span ?? previous.span
             guard let right = parseOrFormula() else {
                 error("Expected formula after '=>'")
                 return left
             }
             left = BinaryFormula(
-                span: SourceSpan(start: startSpan.start, end: previous.span.end),
+                span: SourceSpan(start: leftSpan.start, end: previous.span.end),
                 left: left!,
                 op: .implies,
                 right: right
@@ -713,15 +730,17 @@ public final class Parser {
         // Guard against nil left before entering operator loop
         guard left != nil else { return nil }
 
+        // Store left span before loop to avoid optional chaining issues
+        let leftSpan = left!.span
+
         while match(.doublePipe) || match(.or) {
             let op: LogicalOp = previous.kind == .or ? .orKeyword : .or
-            let startSpan = left?.span ?? previous.span
             guard let right = parseAndFormula() else {
                 error("Expected formula after 'or'")
                 return left
             }
             left = BinaryFormula(
-                span: SourceSpan(start: startSpan.start, end: previous.span.end),
+                span: SourceSpan(start: leftSpan.start, end: previous.span.end),
                 left: left!,
                 op: op,
                 right: right
@@ -738,15 +757,17 @@ public final class Parser {
         // Guard against nil left before entering operator loop
         guard left != nil else { return nil }
 
+        // Store left span before loop to avoid optional chaining issues
+        let leftSpan = left!.span
+
         while match(.doubleAmp) || match(.and) {
             let op: LogicalOp = previous.kind == .and ? .andKeyword : .and
-            let startSpan = left?.span ?? previous.span
             guard let right = parseTemporalBinaryFormula() else {
                 error("Expected formula after 'and'")
                 return left
             }
             left = BinaryFormula(
-                span: SourceSpan(start: startSpan.start, end: previous.span.end),
+                span: SourceSpan(start: leftSpan.start, end: previous.span.end),
                 left: left!,
                 op: op,
                 right: right
@@ -763,6 +784,9 @@ public final class Parser {
         // Guard against nil left before entering operator loop
         guard left != nil else { return nil }
 
+        // Store left span before loop to avoid optional chaining issues
+        let leftSpan = left!.span
+
         while true {
             var op: TemporalBinaryOp? = nil
             if match(.until) { op = .until }
@@ -772,13 +796,12 @@ public final class Parser {
             else if match(.semicolon) { op = .semicolon }
             else { break }
 
-            let startSpan = left?.span ?? previous.span
             guard let right = parseUnaryFormula() else {
                 error("Expected formula after temporal operator")
                 return left
             }
             left = TemporalBinaryFormula(
-                span: SourceSpan(start: startSpan.start, end: previous.span.end),
+                span: SourceSpan(start: leftSpan.start, end: previous.span.end),
                 left: left!,
                 op: op!,
                 right: right
@@ -1016,7 +1039,16 @@ public final class Parser {
         else if match(.lessEqual) { op = .lessEqual }
         else if match(.greater) { op = .greater }
         else if match(.greaterEqual) { op = .greaterEqual }
-        else if match(.not) && match(.in) { op = .notIn }
+        else if match(.not) {
+            // Save position in case 'in' doesn't follow
+            let savedPos = current
+            if match(.in) {
+                op = .notIn
+            } else {
+                // Restore position - 'not' belongs to a different construct
+                current = savedPos
+            }
+        }
 
         if let op = op {
             guard let right = parseExpr() else {
@@ -1063,13 +1095,13 @@ public final class Parser {
 
             // Check for => thenExpr else elseExpr
             if match(.fatArrow) || match(.implies) {
-                guard let thenExpr = parseUnionExpr() else {
+                guard let thenExpr = parseCardinalityExpr() else {
                     error("Expected expression after '=>'")
                     return nil
                 }
 
                 if match(.else) {
-                    guard let elseExpr = parseUnionExpr() else {
+                    guard let elseExpr = parseCardinalityExpr() else {
                         error("Expected expression after 'else'")
                         return nil
                     }
@@ -1093,7 +1125,7 @@ public final class Parser {
         }
 
         // Parse as regular expression
-        guard let expr = parseUnionExpr() else {
+        guard let expr = parseCardinalityExpr() else {
             return nil
         }
 
@@ -1107,14 +1139,14 @@ public final class Parser {
             let savedPos = current
             advance() // consume => or implies
 
-            guard let thenExpr = parseUnionExpr() else {
+            guard let thenExpr = parseCardinalityExpr() else {
                 // Parsing failed, restore and return expr
                 current = savedPos
                 return expr
             }
 
             if match(.else) {
-                guard let elseExpr = parseUnionExpr() else {
+                guard let elseExpr = parseCardinalityExpr() else {
                     error("Expected expression after 'else'")
                     return thenExpr
                 }
@@ -1142,49 +1174,61 @@ public final class Parser {
         return BlockExpr(span: formula.span, formulas: [formula])
     }
 
-    // + (union)
-    private func parseUnionExpr() -> (any ExprNode)? {
-        var left = parseDifferenceExpr()
+    // # (cardinality) - per Alloy spec: between ++ and +/-
+    private func parseCardinalityExpr() -> (any ExprNode)? {
+        let startSpan = currentToken.span
 
-        // Guard against nil left before entering operator loop
-        guard left != nil else { return nil }
-
-        while match(.plus) {
-            let startSpan = left?.span ?? currentToken.span
-            guard let right = parseDifferenceExpr() else {
-                error("Expected expression after '+'")
-                return left
+        if match(.hash) {
+            guard let operand = parseCardinalityExpr() else {
+                error("Expected expression after '#'")
+                return nil
             }
-            left = BinaryExpr(
+            return UnaryExpr(
                 span: SourceSpan(start: startSpan.start, end: previous.span.end),
-                left: left!,
-                op: .union,
-                right: right
+                op: .cardinality,
+                operand: operand
             )
         }
 
-        return left
+        return parseUnionDifferenceExpr()
     }
 
-    // - (difference)
-    private func parseDifferenceExpr() -> (any ExprNode)? {
+    // + (union) and - (difference) at same precedence level per Alloy spec
+    private func parseUnionDifferenceExpr() -> (any ExprNode)? {
         var left = parseIntersectionExpr()
 
         // Guard against nil left before entering operator loop
         guard left != nil else { return nil }
 
-        while match(.minus) {
-            let startSpan = left?.span ?? currentToken.span
-            guard let right = parseIntersectionExpr() else {
-                error("Expected expression after '-'")
-                return left
+        // Store left span before loop to avoid optional chaining issues
+        let leftSpan = left!.span
+
+        while true {
+            if match(.plus) {
+                guard let right = parseIntersectionExpr() else {
+                    error("Expected expression after '+'")
+                    return left
+                }
+                left = BinaryExpr(
+                    span: SourceSpan(start: leftSpan.start, end: previous.span.end),
+                    left: left!,
+                    op: .union,
+                    right: right
+                )
+            } else if match(.minus) {
+                guard let right = parseIntersectionExpr() else {
+                    error("Expected expression after '-'")
+                    return left
+                }
+                left = BinaryExpr(
+                    span: SourceSpan(start: leftSpan.start, end: previous.span.end),
+                    left: left!,
+                    op: .difference,
+                    right: right
+                )
+            } else {
+                break
             }
-            left = BinaryExpr(
-                span: SourceSpan(start: startSpan.start, end: previous.span.end),
-                left: left!,
-                op: .difference,
-                right: right
-            )
         }
 
         return left
@@ -1197,14 +1241,16 @@ public final class Parser {
         // Guard against nil left before entering operator loop
         guard left != nil else { return nil }
 
+        // Store left span before loop to avoid optional chaining issues
+        let leftSpan = left!.span
+
         while match(.ampersand) {
-            let startSpan = left?.span ?? currentToken.span
             guard let right = parseOverrideExpr() else {
                 error("Expected expression after '&'")
                 return left
             }
             left = BinaryExpr(
-                span: SourceSpan(start: startSpan.start, end: previous.span.end),
+                span: SourceSpan(start: leftSpan.start, end: previous.span.end),
                 left: left!,
                 op: .intersection,
                 right: right
@@ -1221,14 +1267,16 @@ public final class Parser {
         // Guard against nil left before entering operator loop
         guard left != nil else { return nil }
 
+        // Store left span before loop to avoid optional chaining issues
+        let leftSpan = left!.span
+
         while match(.plusPlus) {
-            let startSpan = left?.span ?? currentToken.span
             guard let right = parseArrowExpr() else {
                 error("Expected expression after '++'")
                 return left
             }
             left = BinaryExpr(
-                span: SourceSpan(start: startSpan.start, end: previous.span.end),
+                span: SourceSpan(start: leftSpan.start, end: previous.span.end),
                 left: left!,
                 op: .override,
                 right: right
@@ -1239,24 +1287,67 @@ public final class Parser {
     }
 
     // -> (product/arrow)
+    // Helper to parse optional arrow multiplicity
+    private func parseArrowMultiplicity() -> Multiplicity? {
+        if match(.set) { return .set }
+        if match(.one) { return .one }
+        if match(.lone) { return .lone }
+        if match(.some) { return .some }
+        return nil
+    }
+
+    // -> (product/arrow) with optional multiplicities: A [mult] -> [mult] B
     private func parseArrowExpr() -> (any ExprNode)? {
         var left = parseRestrictionExpr()
 
         // Guard against nil left before entering operator loop
         guard left != nil else { return nil }
 
-        while match(.arrow) {
-            let startSpan = left?.span ?? currentToken.span
+        // Store left span before loop to avoid optional chaining issues
+        let leftSpan = left!.span
+
+        while true {
+            // Check for left multiplicity before arrow (e.g., A some -> B)
+            var leftMult: Multiplicity? = nil
+            if check(.set) || check(.one) || check(.lone) || check(.some) {
+                // Look ahead to see if -> follows the multiplicity
+                let savedPos = current
+                leftMult = parseArrowMultiplicity()
+                if !check(.arrow) {
+                    // Not an arrow expression, restore and break
+                    current = savedPos
+                    break
+                }
+            }
+
+            // Match the arrow
+            guard match(.arrow) else { break }
+
+            // Check for right multiplicity after arrow (e.g., A -> lone B)
+            let rightMult = parseArrowMultiplicity()
+
             guard let right = parseRestrictionExpr() else {
                 error("Expected expression after '->'")
                 return left
             }
-            left = BinaryExpr(
-                span: SourceSpan(start: startSpan.start, end: previous.span.end),
-                left: left!,
-                op: .product,
-                right: right
-            )
+
+            // Use ArrowExpr if there are multiplicities, otherwise BinaryExpr for compatibility
+            if leftMult != nil || rightMult != nil {
+                left = ArrowExpr(
+                    span: SourceSpan(start: leftSpan.start, end: previous.span.end),
+                    left: left!,
+                    leftMult: leftMult,
+                    rightMult: rightMult,
+                    right: right
+                )
+            } else {
+                left = BinaryExpr(
+                    span: SourceSpan(start: leftSpan.start, end: previous.span.end),
+                    left: left!,
+                    op: .product,
+                    right: right
+                )
+            }
         }
 
         return left
@@ -1264,32 +1355,33 @@ public final class Parser {
 
     // <: :> (domain/range restriction)
     private func parseRestrictionExpr() -> (any ExprNode)? {
-        var left = parseJoinExpr()
+        var left = parseBoxJoinExpr()
 
         // Guard against nil left before entering operator loop
         guard left != nil else { return nil }
 
+        // Store left span before loop to avoid optional chaining issues
+        let leftSpan = left!.span
+
         while true {
             if match(.leftRestrict) {
-                let startSpan = left?.span ?? currentToken.span
-                guard let right = parseJoinExpr() else {
+                guard let right = parseBoxJoinExpr() else {
                     error("Expected expression after '<:'")
                     return left
                 }
                 left = BinaryExpr(
-                    span: SourceSpan(start: startSpan.start, end: previous.span.end),
+                    span: SourceSpan(start: leftSpan.start, end: previous.span.end),
                     left: left!,
                     op: .domainRestrict,
                     right: right
                 )
             } else if match(.rightRestrict) {
-                let startSpan = left?.span ?? currentToken.span
-                guard let right = parseJoinExpr() else {
+                guard let right = parseBoxJoinExpr() else {
                     error("Expected expression after ':>'")
                     return left
                 }
                 left = BinaryExpr(
-                    span: SourceSpan(start: startSpan.start, end: previous.span.end),
+                    span: SourceSpan(start: leftSpan.start, end: previous.span.end),
                     left: left!,
                     op: .rangeRestrict,
                     right: right
@@ -1302,21 +1394,68 @@ public final class Parser {
         return left
     }
 
-    // . (join)
+    // [] (box join) and ' (prime) - per Alloy spec: lower precedence than dot join
+    private func parseBoxJoinExpr() -> (any ExprNode)? {
+        var left = parseJoinExpr()
+
+        // Guard against nil left before entering operator loop
+        guard left != nil else { return nil }
+
+        // Store left span before loop to avoid optional chaining issues
+        let leftSpan = left!.span
+
+        // Box join and prime can be chained: expr[args]' or expr'[args]
+        while true {
+            // Box join: expr[args]
+            if check(.leftBracket) && !isParagraphStart() {
+                advance() // consume [
+                var args: [any ExprNode] = []
+                if !check(.rightBracket) {
+                    repeat {
+                        if let arg = parseExpr() {
+                            args.append(arg)
+                        }
+                    } while match(.comma)
+                }
+                expect(.rightBracket, "Expected ']' after arguments")
+                left = BoxJoinExpr(
+                    span: SourceSpan(start: leftSpan.start, end: previous.span.end),
+                    left: left!,
+                    args: args
+                )
+            }
+            // Prime (next state): expr'
+            else if match(.prime) {
+                left = UnaryExpr(
+                    span: SourceSpan(start: leftSpan.start, end: previous.span.end),
+                    op: .prime,
+                    operand: left!
+                )
+            } else {
+                break
+            }
+        }
+
+        return left
+    }
+
+    // . (join) - higher precedence than box join
     private func parseJoinExpr() -> (any ExprNode)? {
         var left = parseUnaryExpr()
 
         // Guard against nil left before entering operator loop
         guard left != nil else { return nil }
 
+        // Store left span before loop to avoid optional chaining issues
+        let leftSpan = left!.span
+
         while match(.dot) {
-            let startSpan = left?.span ?? currentToken.span
             guard let right = parseUnaryExpr() else {
                 error("Expected expression after '.'")
                 return left
             }
             left = BinaryExpr(
-                span: SourceSpan(start: startSpan.start, end: previous.span.end),
+                span: SourceSpan(start: leftSpan.start, end: previous.span.end),
                 left: left!,
                 op: .join,
                 right: right
@@ -1364,14 +1503,17 @@ public final class Parser {
                 operand: operand
             )
         }
-        if match(.hash) {
+        // Note: Cardinality (#) is now handled in parseCardinalityExpr() at correct precedence
+
+        // Unary minus for negative integers: -5, -x
+        if match(.minus) {
             guard let operand = parseUnaryExpr() else {
-                error("Expected expression after '#'")
+                error("Expected expression after '-'")
                 return nil
             }
             return UnaryExpr(
                 span: SourceSpan(start: startSpan.start, end: previous.span.end),
-                op: .cardinality,
+                op: .negate,
                 operand: operand
             )
         }
@@ -1464,6 +1606,13 @@ public final class Parser {
                 name: QualifiedName(single: Identifier(span: previous.span, name: "Int"))
             )
         }
+        // `this` keyword for referencing current signature in sig facts
+        if match(.this) {
+            return NameExpr(
+                span: previous.span,
+                name: QualifiedName(single: Identifier(span: previous.span, name: "this"))
+            )
+        }
 
         // Parenthesized expression
         if match(.leftParen) {
@@ -1549,39 +1698,11 @@ public final class Parser {
         // Identifier / Qualified name
         if case .identifier = currentToken.kind {
             guard let name = parseQualifiedName() else { return nil }
-            var result: any ExprNode = NameExpr(
+            // Note: Box join is now handled in parseBoxJoinExpr() at correct precedence level
+            return NameExpr(
                 span: SourceSpan(start: startSpan.start, end: previous.span.end),
                 name: name
             )
-
-            // Check for box join: expr[args]
-            while match(.leftBracket) {
-                var args: [any ExprNode] = []
-                if !check(.rightBracket) {
-                    repeat {
-                        if let arg = parseExpr() {
-                            args.append(arg)
-                        }
-                    } while match(.comma)
-                }
-                expect(.rightBracket, "Expected ']' after arguments")
-                result = BoxJoinExpr(
-                    span: SourceSpan(start: startSpan.start, end: previous.span.end),
-                    left: result,
-                    args: args
-                )
-            }
-
-            // Check for prime (next state)
-            if match(.prime) {
-                result = UnaryExpr(
-                    span: SourceSpan(start: startSpan.start, end: previous.span.end),
-                    op: .prime,
-                    operand: result
-                )
-            }
-
-            return result
         }
 
         // @name - suppresses field expansion in sig facts (Alloy spec)
@@ -1617,14 +1738,40 @@ public final class Parser {
                 if i < tokens.count, case .identifier = tokens[i].kind {
                     i += 1
                 } else {
+                    // Comma without following identifier - might be end of names
                     break
                 }
             } else {
                 break
             }
         }
-        // Must have colon
-        return i < tokens.count && tokens[i].kind == .colon
+        // Must have colon followed by expression and pipe
+        if i < tokens.count && tokens[i].kind == .colon {
+            // Look ahead for pipe to confirm this is a comprehension
+            i += 1
+            // Skip tokens until we find pipe or right brace (end of comprehension pattern)
+            var nestingLevel = 0
+            while i < tokens.count {
+                let tokenKind = tokens[i].kind
+                if tokenKind == .leftBrace || tokenKind == .leftParen || tokenKind == .leftBracket {
+                    nestingLevel += 1
+                } else if tokenKind == .rightBrace {
+                    if nestingLevel == 0 {
+                        // Reached end without finding pipe
+                        return false
+                    }
+                    nestingLevel -= 1
+                } else if tokenKind == .rightParen || tokenKind == .rightBracket {
+                    if nestingLevel > 0 {
+                        nestingLevel -= 1
+                    }
+                } else if tokenKind == .pipe && nestingLevel == 0 {
+                    return true
+                }
+                i += 1
+            }
+        }
+        return false
     }
 
     // MARK: - Token Helpers

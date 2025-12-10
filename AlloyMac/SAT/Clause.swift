@@ -211,7 +211,8 @@ public final class ClauseDatabase: @unchecked Sendable {
     /// Add a watch for a literal
     private func addWatch(_ literal: Literal, _ clauseRef: ClauseRef) {
         let code = Int(literal.code)
-        if code < watchLists.count {
+        // Validate bounds: code must be >= 0 and < watchLists.count
+        if code >= 0 && code < watchLists.count {
             watchLists[code].append(clauseRef)
         }
     }
@@ -219,7 +220,8 @@ public final class ClauseDatabase: @unchecked Sendable {
     /// Remove a watch for a literal
     private func removeWatch(_ literal: Literal, _ clauseRef: ClauseRef) {
         let code = Int(literal.code)
-        if code < watchLists.count {
+        // Validate bounds: code must be >= 0 and < watchLists.count
+        if code >= 0 && code < watchLists.count {
             watchLists[code].removeAll { $0 == clauseRef }
         }
     }
@@ -227,14 +229,16 @@ public final class ClauseDatabase: @unchecked Sendable {
     /// Get clauses watching a literal
     public func watchers(of literal: Literal) -> [ClauseRef] {
         let code = Int(literal.code)
-        guard code < watchLists.count else { return [] }
+        // Validate both bounds: code must be >= 0 and < watchLists.count
+        guard code >= 0 && code < watchLists.count else { return [] }
         return watchLists[code]
     }
 
     /// Get mutable access to watch list
     public func watchList(for literal: Literal) -> ArraySlice<ClauseRef> {
         let code = Int(literal.code)
-        guard code < watchLists.count else { return [] }
+        // Validate bounds: code must be >= 0 and < watchLists.count
+        guard code >= 0 && code < watchLists.count else { return [] }
         return watchLists[code][...]
     }
 
@@ -242,7 +246,8 @@ public final class ClauseDatabase: @unchecked Sendable {
     /// Returns the new watch list for the literal
     public func updateWatches(for literal: Literal, keeping: [ClauseRef]) {
         let code = Int(literal.code)
-        if code < watchLists.count {
+        // Validate bounds: code must be >= 0 and < watchLists.count
+        if code >= 0 && code < watchLists.count {
             watchLists[code] = keeping
         }
     }

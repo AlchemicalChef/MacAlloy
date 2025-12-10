@@ -298,6 +298,57 @@ public final class VSIDSHeuristic: @unchecked Sendable {
         heapPosition[Int(heap[i])] = i
         heapPosition[Int(heap[j])] = j
     }
+
+    // MARK: - Heap Invariant Validation (Debug Support)
+
+    /// Validate heap invariant for debugging
+    /// Returns true if heap is valid (max-heap property holds)
+    public func validateHeapInvariant() -> Bool {
+        guard !heap.isEmpty else { return true }
+
+        for i in 0..<heap.count {
+            let varIdx = Int(heap[i])
+
+            // Validate bounds
+            guard varIdx > 0 && varIdx < activities.count else {
+                return false
+            }
+
+            // Check heap position consistency
+            if heapPosition[varIdx] != i {
+                return false
+            }
+
+            // Check max-heap property: parent >= children
+            let left = 2 * i + 1
+            let right = 2 * i + 2
+
+            if left < heap.count {
+                let leftVarIdx = Int(heap[left])
+                if leftVarIdx >= 0 && leftVarIdx < activities.count {
+                    if activities[leftVarIdx] > activities[varIdx] {
+                        return false
+                    }
+                }
+            }
+
+            if right < heap.count {
+                let rightVarIdx = Int(heap[right])
+                if rightVarIdx >= 0 && rightVarIdx < activities.count {
+                    if activities[rightVarIdx] > activities[varIdx] {
+                        return false
+                    }
+                }
+            }
+        }
+
+        return true
+    }
+
+    /// Assert heap invariant in debug builds
+    public func assertHeapInvariant() {
+        assert(validateHeapInvariant(), "Heap invariant violated")
+    }
 }
 
 // MARK: - Luby Restart Sequence

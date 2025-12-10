@@ -140,6 +140,24 @@ public enum TokenKind: Equatable, Hashable, Sendable {
     case none
     /// `Int` keyword (integer type)
     case int
+    /// `this` keyword (current signature reference)
+    case this
+
+    // MARK: - Keywords - Visibility
+
+    /// `private` keyword (visibility modifier)
+    case `private`
+
+    // MARK: - Keywords - Alloy 6 Event Idiom
+
+    /// `enabled` keyword (event idiom)
+    case enabled
+    /// `event` keyword (event idiom)
+    case event
+    /// `invariant` keyword (temporal invariant)
+    case invariant
+    /// `modifies` keyword (frame condition)
+    case modifies
 
     // MARK: - Operators - Relational
 
@@ -298,6 +316,12 @@ extension TokenKind: CustomStringConvertible {
         case .iden: return "iden"
         case .none: return "none"
         case .int: return "Int"
+        case .this: return "this"
+        case .private: return "private"
+        case .enabled: return "enabled"
+        case .event: return "event"
+        case .invariant: return "invariant"
+        case .modifies: return "modifies"
         case .dot: return "."
         case .arrow: return "->"
         case .tilde: return "~"
@@ -412,6 +436,16 @@ extension TokenKind {
         "iden": .iden,
         "none": .none,
         "Int": .int,
+        "this": .this,
+
+        // Visibility
+        "private": .private,
+
+        // Alloy 6 event idiom
+        "enabled": .enabled,
+        "event": .event,
+        "invariant": .invariant,
+        "modifies": .modifies,
     ]
 
     /// Look up a keyword, returning nil if not a keyword

@@ -8,7 +8,7 @@ public struct TraceView: View {
     let instance: AlloyInstance?
     @State private var currentState: Int = 0
     @State private var isPlaying: Bool = false
-    @State private var timerCancellable: AnyCancellable?
+    @State private var playbackTask: Task<Void, Never>?
 
     public init(instance: AlloyInstance?) {
         self.instance = instance
@@ -25,21 +25,27 @@ public struct TraceView: View {
             }
         }
         .onChange(of: isPlaying) { _, playing in
+            // Cancel any existing playback task
+            playbackTask?.cancel()
+            playbackTask = nil
+
             if playing {
-                // Start timer when playing
-                timerCancellable = Timer.publish(every: 1.0, on: .main, in: .common)
-                    .autoconnect()
-                    .sink { _ in advanceState() }
-            } else {
-                // Cancel timer when not playing
-                timerCancellable?.cancel()
-                timerCancellable = nil
+                // Start Task-based playback timer
+                playbackTask = Task { @MainActor in
+                    while !Task.isCancelled && isPlaying {
+                        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                        if !Task.isCancelled && isPlaying {
+                            advanceState()
+                        }
+                    }
+                }
             }
         }
         .onDisappear {
-            // Clean up timer on view dismissal
-            timerCancellable?.cancel()
-            timerCancellable = nil
+            // Clean up task on view dismissal
+            playbackTask?.cancel()
+            playbackTask = nil
+            isPlaying = false
         }
     }
 
@@ -282,17 +288,23 @@ public struct TraceView: View {
 
             Spacer()
 
-            // State slider
-            Slider(value: Binding(
-                get: { Double(currentState) },
-                set: { currentState = Int($0) }
-            ), in: 0...Double(trace.length - 1), step: 1)
-            .frame(maxWidth: 300)
+            // State slider (only show if we have more than one state)
+            if trace.length > 1 {
+                Slider(value: Binding(
+                    get: { Double(currentState) },
+                    set: { currentState = Int($0) }
+                ), in: 0...Double(trace.length - 1), step: 1)
+                .frame(maxWidth: 300)
 
-            Text("\(currentState) / \(trace.length - 1)")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .frame(width: 60)
+                Text("\(currentState) / \(trace.length - 1)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(width: 60)
+            } else {
+                Text("Single state")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .padding()
         .background(Color(nsColor: .controlBackgroundColor))

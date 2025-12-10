@@ -116,8 +116,12 @@ public struct SyntaxHighlighter {
             return theme.operatorColor
 
         // Special values
-        case .none, .univ, .iden, .int:
+        case .none, .univ, .iden, .int, .this:
             return theme.builtinColor
+
+        // Visibility and event idiom keywords
+        case .private, .enabled, .event, .invariant, .modifies:
+            return theme.keywordColor
 
         // Literals
         case .integer:

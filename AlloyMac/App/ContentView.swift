@@ -30,6 +30,7 @@ struct ContentView: View {
     @State private var showRenameDialog = false
     @State private var renameSymbolName = ""
     @State private var renameReferences: [Reference] = []
+    @State private var scrollTargetClearTask: Task<Void, Never>?
 
     /// Pending action after unsaved changes confirmation
     enum PendingAction {
@@ -41,6 +42,7 @@ struct ContentView: View {
     enum Tab {
         case editor
         case instances
+        case diff
         case trace
         case diagnostics
         case report
@@ -349,6 +351,8 @@ struct ContentView: View {
                 Button(action: handleSaveDocument) {
                     Label("Save", systemImage: "square.and.arrow.down")
                 }
+                // Disable when no unsaved changes AND file already exists (nothing to save)
+                // Enable when has changes OR no file URL (needs save/save-as)
                 .disabled(!document.hasUnsavedChanges && document.fileURL != nil)
 
                 Button(action: { showSavePicker = true }) {
@@ -427,11 +431,20 @@ struct ContentView: View {
                             showRenameDialog = true
                         }
                     )
-                    .onChange(of: scrollTarget) { _, _ in
+                    .onChange(of: scrollTarget) { _, newTarget in
+                        // Cancel previous clear task
+                        scrollTargetClearTask?.cancel()
+
                         // Clear scroll target after a brief delay to allow re-triggering
-                        Task { @MainActor in
+                        scrollTargetClearTask = Task { @MainActor in
+                            // Store the target we're about to clear
+                            let targetToCheck = newTarget
                             try? await Task.sleep(nanoseconds: 100_000_000)
-                            scrollTarget = nil
+
+                            // Only clear if it hasn't changed since we started
+                            if scrollTarget == targetToCheck {
+                                scrollTarget = nil
+                            }
                         }
                     }
 
@@ -455,6 +468,8 @@ struct ContentView: View {
                 } else {
                     InstanceView(instance: document.currentInstance)
                 }
+            case .diff:
+                InstanceDiffView(instances: document.instances)
             case .trace:
                 TraceView(instance: document.currentInstance)
             case .diagnostics:
@@ -500,6 +515,11 @@ struct ContentView: View {
             }
             TabButton(title: "Instances", systemImage: "circle.grid.3x3", isSelected: selectedTab == .instances) {
                 selectedTab = .instances
+            }
+            if document.instances.count >= 2 {
+                TabButton(title: "Diff", systemImage: "rectangle.split.2x1", isSelected: selectedTab == .diff) {
+                    selectedTab = .diff
+                }
             }
             if document.currentInstance?.isTemporal == true {
                 TabButton(title: "Trace", systemImage: "clock.arrow.circlepath", isSelected: selectedTab == .trace) {
