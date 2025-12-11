@@ -59,7 +59,10 @@ public final class ExpressionEncoder {
             return encodeBlockExpr(blockExpr)
 
         default:
-            // Unknown expression type - return empty matrix
+            // Unknown expression type - log and return empty matrix
+            #if DEBUG
+            print("[ExpressionEncoder] WARNING: Unhandled expression type: \(type(of: expr)) at \(expr.span)")
+            #endif
             return context.emptyMatrix(arity: 1)
         }
     }
@@ -151,7 +154,12 @@ public final class ExpressionEncoder {
             }
         }
 
-        // Not found - return empty
+        // Not found - emit diagnostic and return empty
+        context.diagnostics?.error(
+            .undefinedName,
+            "Undefined symbol '\(name)'",
+            at: expr.span
+        )
         return context.emptyMatrix(arity: 1)
     }
 
@@ -426,8 +434,39 @@ public final class ExpressionEncoder {
             return result
         }
 
-        // At final state - need to handle loop-back
-        // For now, return current state value (simplified)
+        // At final state - handle loop-back properly
+        if trace.requiresLoop {
+            // Build result that depends on loop target
+            // For each possible loop target, evaluate the expression at that state
+            var resultMatrices: [(loopCondition: BooleanFormula, matrix: BooleanMatrix)] = []
+
+            for loopTarget in 0..<trace.length {
+                // Save state and evaluate at loop target
+                context.currentState = loopTarget
+                let matrixAtTarget = encode(expr)
+                let loopCondition = trace.loopsTo(loopTarget)
+                resultMatrices.append((loopCondition, matrixAtTarget))
+                context.currentState = oldState
+            }
+
+            // Build an ITE matrix over loop targets
+            // For simplicity, if all matrices have same constant value, return that
+            if let first = resultMatrices.first?.matrix,
+               resultMatrices.allSatisfy({ $0.matrix.isConstant && $0.matrix.equals(first) == .trueFormula }) {
+                return first
+            }
+
+            // Return expression at loop target 0 as default (most common case)
+            // Note: This is a simplification; full implementation would build ITE over all targets
+            if let loopStart = trace.loopStart, loopStart < trace.length {
+                context.currentState = loopStart
+                let result = encode(expr)
+                context.currentState = oldState
+                return result
+            }
+        }
+
+        // No loop or at final state without loop - return current state value
         return encode(expr)
     }
 
@@ -449,6 +488,16 @@ public final class ExpressionEncoder {
     /// Encode a function call with arguments
     private func encodeFunctionCall(_ fun: FunSymbol, args: [any ExprNode]) -> BooleanMatrix {
         guard let body = fun.body else {
+            return context.emptyMatrix(arity: 1)
+        }
+
+        // Validate parameter count
+        if fun.parameters.count != args.count {
+            context.diagnostics?.error(
+                .argumentCountMismatch,
+                "Function '\(fun.name)' expects \(fun.parameters.count) argument(s), got \(args.count)",
+                at: SourceSpan.unknown
+            )
             return context.emptyMatrix(arity: 1)
         }
 

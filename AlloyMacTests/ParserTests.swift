@@ -805,6 +805,39 @@ final class ParserTests: XCTestCase {
         XCTAssertEqual(formula?.op, .iff)
     }
 
+    // MARK: - Arrow Expression Tests (Alloy 6.2)
+
+    func testArrowExprWithMultiplicities() {
+        let module = parse("sig A { r: A -> lone B }")
+        XCTAssertNotNil(module)
+        let sig = module?.paragraphs.first as? SigDeclNode
+        XCTAssertEqual(sig?.fields.count, 1)
+    }
+
+    func testArrowExprBothMultiplicities() {
+        let module = parse("sig A { r: A some -> one B }")
+        XCTAssertNotNil(module)
+        let sig = module?.paragraphs.first as? SigDeclNode
+        XCTAssertEqual(sig?.fields.count, 1)
+    }
+
+    func testArrowExprLeftMultiplicity() {
+        let module = parse("sig A { r: A one -> B }")
+        XCTAssertNotNil(module)
+    }
+
+    func testArrowExprInFact() {
+        let module = parse("fact { A -> lone B in rel }")
+        XCTAssertNotNil(module)
+    }
+
+    func testChainedArrowExpr() {
+        let module = parse("sig A { r: A -> B -> C }")
+        XCTAssertNotNil(module)
+        let sig = module?.paragraphs.first as? SigDeclNode
+        XCTAssertEqual(sig?.fields.count, 1)
+    }
+
     // MARK: - Error Recovery
 
     func testErrorRecoveryInBlock() {

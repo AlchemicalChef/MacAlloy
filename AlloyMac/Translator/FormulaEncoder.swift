@@ -67,7 +67,10 @@ public final class FormulaEncoder {
             return encodeExprFormula(exprForm)
 
         default:
-            // Unknown formula type
+            // Unknown formula type - log and return true
+            #if DEBUG
+            print("[FormulaEncoder] WARNING: Unhandled formula type: \(type(of: formula)) at \(formula.span)")
+            #endif
             return .trueFormula
         }
     }
@@ -350,13 +353,29 @@ public final class FormulaEncoder {
             return encodePredicateCall(predSym, args: formula.args)
         }
 
-        // Not found - return true (no constraint)
+        // Not found - emit diagnostic and return true (no constraint)
+        context.diagnostics?.error(
+            .undefinedPredicate,
+            "Undefined predicate '\(name)'",
+            at: formula.callee.span
+        )
         return .trueFormula
     }
 
     /// Encode a predicate call with arguments
     private func encodePredicateCall(_ pred: PredSymbol, args: [any ExprNode]) -> BooleanFormula {
         guard let body = pred.body else {
+            return .trueFormula
+        }
+
+        // Validate parameter count (accounting for receiver in method-style predicates)
+        let expectedCount = pred.parameters.count + (pred.receiver != nil ? 1 : 0)
+        if args.count != pred.parameters.count && args.count != expectedCount {
+            context.diagnostics?.error(
+                .argumentCountMismatch,
+                "Predicate '\(pred.fullName)' expects \(pred.parameters.count) argument(s), got \(args.count)",
+                at: SourceSpan.unknown
+            )
             return .trueFormula
         }
 

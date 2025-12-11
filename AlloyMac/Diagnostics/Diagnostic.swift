@@ -57,6 +57,8 @@ public enum DiagnosticCode: String, Sendable {
     case expectedSet = "E409"
     case expectedFormula = "E410"
     case expectedInteger = "E411"
+    case argumentCountMismatch = "E412"
+    case privateAccess = "E413"
 
     // Semantic errors - Multiplicity (5xx)
     case invalidMultiplicity = "E501"

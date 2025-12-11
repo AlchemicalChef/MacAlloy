@@ -59,6 +59,9 @@ public final class TranslationContext {
     /// When set, field names are auto-expanded to this.field per Alloy spec
     public var currentSigFact: SigSymbol? = nil
 
+    /// Diagnostic collector for reporting translation errors
+    public var diagnostics: DiagnosticCollector?
+
     // MARK: - Initialization
 
     /// Create a translation context from scopes
@@ -121,6 +124,23 @@ public final class TranslationContext {
                         )
                         temporalRelations[field.name] = tempRel
                     }
+                }
+
+                // Create temporal relations for variable signatures
+                if sig.sigType.isVariable {
+                    let sigTuples = sigAtoms[sig.name]?.map { AtomTuple($0) } ?? []
+                    let sigBounds = RelationBounds(
+                        name: sig.name,
+                        lower: TupleSet([]), // Can be empty initially
+                        upper: TupleSet(sigTuples)
+                    )
+                    let tempRel = TemporalRelation(
+                        name: sig.name,
+                        bounds: sigBounds,
+                        trace: trace,
+                        isVariable: true
+                    )
+                    temporalRelations[sig.name] = tempRel
                 }
             }
         }
@@ -385,9 +405,13 @@ public final class TranslationContext {
 
     // MARK: - Relation Access
 
-    /// Get the matrix for a signature
+    /// Get the matrix for a signature at the current state
     public func sigMatrix(_ name: String) -> BooleanMatrix? {
-        sigMatrices[name]
+        // Check if this is a temporal (variable) signature
+        if let tempRel = temporalRelations[name] {
+            return tempRel.matrix(at: currentState)
+        }
+        return sigMatrices[name]
     }
 
     /// Get the matrix for a field at the current state

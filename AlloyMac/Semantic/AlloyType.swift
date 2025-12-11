@@ -1,5 +1,15 @@
 import Foundation
 
+// MARK: - Type Checking Context
+
+/// Context for type checking operations
+/// - `inference`: Permissive mode during type inference - unknown types are compatible with anything
+/// - `validation`: Strict mode during validation - unknown types are not compatible
+public enum TypeCheckingContext: Sendable {
+    case inference
+    case validation
+}
+
 // MARK: - Alloy Type Protocol
 
 /// Base protocol for all Alloy types
@@ -296,11 +306,24 @@ public struct UnknownType: AlloyType {
     }
 
     public func isSubtypeOf(_ other: AlloyType) -> Bool {
-        // Unknown types should only be compatible during type inference, not for real type checks
-        // In a real type system, we'd want to return false for actual checks
-        // For now, we remain permissive to allow incomplete type inference
-        // TODO: Add context to distinguish inference from validation
-        true // Unknown is compatible with anything during inference
+        // Default to inference mode for backwards compatibility
+        isSubtypeOf(other, context: .inference)
+    }
+
+    /// Check subtype relationship with explicit context
+    /// - Parameters:
+    ///   - other: The type to check against
+    ///   - context: The type checking context (inference or validation)
+    /// - Returns: true if this type is a subtype of other in the given context
+    public func isSubtypeOf(_ other: AlloyType, context: TypeCheckingContext) -> Bool {
+        switch context {
+        case .inference:
+            // During inference, unknown is compatible with anything
+            return true
+        case .validation:
+            // During validation, unknown is only compatible with itself or univ
+            return other is UnknownType || other is UnivType
+        }
     }
 
     public func join(with other: AlloyType) -> AlloyType? {

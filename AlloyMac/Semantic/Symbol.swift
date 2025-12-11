@@ -68,13 +68,18 @@ public final class SigSymbol: Symbol, @unchecked Sendable {
     /// Appended signature fact
     public var sigFact: (any FormulaNode)?
 
+    /// Whether this signature is private
+    public let isPrivate: Bool
+
     public init(name: String,
                 definedAt: SourceSpan,
                 isAbstract: Bool = false,
                 isVariable: Bool = false,
+                isPrivate: Bool = false,
                 multiplicity: Multiplicity? = nil) {
         self.name = name
         self.definedAt = definedAt
+        self.isPrivate = isPrivate
         self.sigType = SigType(
             name: name,
             isAbstract: isAbstract,
@@ -196,12 +201,17 @@ public final class PredSymbol: Symbol, @unchecked Sendable {
     /// The body AST node
     public var body: (any FormulaNode)?
 
+    /// Whether this predicate is private
+    public let isPrivate: Bool
+
     public init(name: String,
                 definedAt: SourceSpan,
-                receiver: SigSymbol? = nil) {
+                receiver: SigSymbol? = nil,
+                isPrivate: Bool = false) {
         self.name = name
         self.definedAt = definedAt
         self.receiver = receiver
+        self.isPrivate = isPrivate
     }
 
     public var description: String {
@@ -238,14 +248,19 @@ public final class FunSymbol: Symbol, @unchecked Sendable {
     /// The body AST node
     public var body: (any ExprNode)?
 
+    /// Whether this function is private
+    public let isPrivate: Bool
+
     public init(name: String,
                 returnType: AlloyType,
                 definedAt: SourceSpan,
-                receiver: SigSymbol? = nil) {
+                receiver: SigSymbol? = nil,
+                isPrivate: Bool = false) {
         self.name = name
         self.type = returnType
         self.definedAt = definedAt
         self.receiver = receiver
+        self.isPrivate = isPrivate
     }
 
     public var description: String {

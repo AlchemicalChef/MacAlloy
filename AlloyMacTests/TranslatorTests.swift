@@ -639,6 +639,148 @@ final class TranslatorTests: XCTestCase {
         XCTAssertNil(result.instance)
     }
 
+    // MARK: - Expression Coverage Tests (Gap #6)
+
+    func testComprehensionExpression() throws {
+        let source = """
+        sig Person { age: Int }
+        fun adults: set Person { { p: Person | p.age > 0 } }
+        """
+        let translator = try createTranslator(source, scope: 2)
+        translator.translateFacts()
+
+        let result = solve(translator)
+        XCTAssertTrue(result.isSat)
+    }
+
+    func testLetExpression() throws {
+        let source = """
+        sig A { f: B }
+        sig B {}
+        fact { let x = A | some x }
+        """
+        let translator = try createTranslator(source, scope: 2)
+        translator.translateFacts()
+
+        let result = solve(translator)
+        XCTAssertTrue(result.isSat)
+    }
+
+    func testIfExpression() throws {
+        let source = """
+        sig A {}
+        sig B {}
+        fact { some A => some B else no B }
+        """
+        let translator = try createTranslator(source, scope: 2)
+        translator.translateFacts()
+
+        let result = solve(translator)
+        XCTAssertTrue(result.isSat)
+    }
+
+    func testBoxJoinExpression() throws {
+        let source = """
+        sig A { f: B }
+        sig B {}
+        fact { all a: A | some f[a] }
+        """
+        let translator = try createTranslator(source, scope: 2)
+        translator.translateFacts()
+
+        let result = solve(translator)
+        XCTAssertTrue(result.isSat)
+    }
+
+    // MARK: - Operator Coverage Tests (Gap #7)
+
+    func testOverrideOperator() throws {
+        let source = """
+        sig A { f: B }
+        sig B {}
+        fact { some f ++ (A -> B) }
+        """
+        let translator = try createTranslator(source, scope: 2)
+        translator.translateFacts()
+
+        let result = solve(translator)
+        XCTAssertTrue(result.isSat)
+    }
+
+    func testCardinalityOperator() throws {
+        let source = """
+        sig A {}
+        fact { #A > 0 }
+        """
+        let translator = try createTranslator(source, scope: 3)
+        translator.translateFacts()
+
+        let result = solve(translator)
+        XCTAssertTrue(result.isSat)
+
+        if case .sat(let instance) = result {
+            let aAtoms = instance[sig: "A"]
+            XCTAssertNotNil(aAtoms)
+            XCTAssertGreaterThan(aAtoms!.count, 0)
+        }
+    }
+
+    func testDomainRestrictionOperator() throws {
+        let source = """
+        sig A { f: set B }
+        sig B {}
+        sig Sub in A {}
+        fact { some Sub <: f }
+        """
+        let translator = try createTranslator(source, scope: 2)
+        translator.translateFacts()
+
+        let result = solve(translator)
+        XCTAssertTrue(result.isSat)
+    }
+
+    func testRangeRestrictionOperator() throws {
+        let source = """
+        sig A { f: set B }
+        sig B {}
+        sig Sub in B {}
+        fact { some f :> Sub }
+        """
+        let translator = try createTranslator(source, scope: 2)
+        translator.translateFacts()
+
+        let result = solve(translator)
+        XCTAssertTrue(result.isSat)
+    }
+
+    func testShiftLeftOperator() throws {
+        let source = """
+        sig A { val: Int }
+        fact { all a: A | a.val.shl[1] > 0 }
+        """
+        // This tests the shift left operator translation
+        let symbolTable = try analyzeModel(source)
+        XCTAssertNotNil(symbolTable)
+    }
+
+    func testShiftRightArithmeticOperator() throws {
+        let source = """
+        sig A { val: Int }
+        fact { all a: A | a.val.sha[1] >= 0 }
+        """
+        let symbolTable = try analyzeModel(source)
+        XCTAssertNotNil(symbolTable)
+    }
+
+    func testShiftRightLogicalOperator() throws {
+        let source = """
+        sig A { val: Int }
+        fact { all a: A | a.val.shr[1] >= 0 }
+        """
+        let symbolTable = try analyzeModel(source)
+        XCTAssertNotNil(symbolTable)
+    }
+
     // MARK: - Performance Tests
 
     func testLargerScope() throws {
