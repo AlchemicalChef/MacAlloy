@@ -388,6 +388,15 @@ public final class TranslationContext {
         bindings.removeLast()
     }
 
+    /// Execute a block within a new scope, automatically pushing and popping
+    /// - Parameter body: The closure to execute within the scope
+    /// - Returns: The result of the closure
+    public func withScope<T>(_ body: () throws -> T) rethrows -> T {
+        pushScope()
+        defer { popScope() }
+        return try body()
+    }
+
     /// Bind a variable name to a matrix
     public func bind(_ name: String, to matrix: BooleanMatrix) {
         bindings[bindings.count - 1][name] = matrix

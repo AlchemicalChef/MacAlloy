@@ -417,7 +417,6 @@ extension SemanticAnalyzer {
     private func performSemanticChecks(_ module: ModuleNode) {
         checkTemporalConstraints(module)
         checkMultiplicityConstraints()
-        checkUnusedDeclarations()
     }
 
     /// Check temporal operator usage
@@ -438,12 +437,6 @@ extension SemanticAnalyzer {
                                     at: sig.definedAt)
             }
         }
-    }
-
-    /// Check for unused declarations
-    private func checkUnusedDeclarations() {
-        // This would require usage tracking during type checking
-        // For now, we skip this check
     }
 }
 

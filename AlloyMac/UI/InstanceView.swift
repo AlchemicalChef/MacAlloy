@@ -189,7 +189,7 @@ public struct InstanceView: View {
         let transformedY = center.y + (locationMinusOffset.y - center.y) / scale
 
         // Find if we tapped on a node
-        let nodeRadius: CGFloat = 25
+        let nodeRadius: CGFloat = UIConstants.Graph.nodeRadius
         for (atomName, pos) in positions {
             let dx = transformedX - pos.x
             let dy = transformedY - pos.y
@@ -417,142 +417,18 @@ public struct InstanceView: View {
 
     private func computePositions(for instance: AlloyInstance, in size: CGSize) -> [String: CGPoint] {
         // Check if cached positions are still valid - must have same atoms, not just same count
-        let currentAtoms = Set(collectAllAtoms(from: instance))
+        let currentAtoms = Set(GraphLayoutService.collectAllAtoms(from: instance))
         let cachedAtoms = Set(nodePositions.keys)
         if !nodePositions.isEmpty && currentAtoms == cachedAtoms {
             return nodePositions
         }
 
-        var positions: [String: CGPoint] = [:]
-
-        // Use force-directed layout simulation
-        let atoms = collectAllAtoms(from: instance)
-        let edges = collectAllEdges(from: instance)
-
-        // Initial placement in a circle
-        let center = CGPoint(x: size.width / 2, y: size.height / 2)
-        let radius = min(size.width, size.height) * 0.35
-
-        for (index, atom) in atoms.enumerated() {
-            let angle = 2 * .pi * Double(index) / Double(max(1, atoms.count))
-            let x = center.x + radius * cos(angle)
-            let y = center.y + radius * sin(angle)
-            positions[atom] = CGPoint(x: x, y: y)
-        }
-
-        // Simple force-directed iterations
-        for _ in 0..<50 {
-            var forces: [String: CGVector] = [:]
-            for atom in atoms {
-                forces[atom] = .zero
-            }
-
-            // Repulsion between all nodes
-            for i in 0..<atoms.count {
-                for j in (i+1)..<atoms.count {
-                    guard let p1 = positions[atoms[i]],
-                          let p2 = positions[atoms[j]] else { continue }
-
-                    let dx = p2.x - p1.x
-                    let dy = p2.y - p1.y
-                    let dist = sqrt(dx * dx + dy * dy)
-                    if dist > 1 {
-                        let force = 5000 / (dist * dist)
-                        let fx = (dx / dist) * force
-                        let fy = (dy / dist) * force
-
-                        if var forceI = forces[atoms[i]] {
-                            forceI.dx -= fx
-                            forceI.dy -= fy
-                            forces[atoms[i]] = forceI
-                        }
-                        if var forceJ = forces[atoms[j]] {
-                            forceJ.dx += fx
-                            forceJ.dy += fy
-                            forces[atoms[j]] = forceJ
-                        }
-                    }
-                }
-            }
-
-            // Attraction along edges
-            for edge in edges {
-                guard let p1 = positions[edge.from],
-                      let p2 = positions[edge.to] else { continue }
-
-                let dx = p2.x - p1.x
-                let dy = p2.y - p1.y
-                let dist = sqrt(dx * dx + dy * dy)
-                if dist > 1 {
-                    let force = dist * 0.01
-                    let fx = (dx / dist) * force
-                    let fy = (dy / dist) * force
-
-                    if var forceFrom = forces[edge.from] {
-                        forceFrom.dx += fx
-                        forceFrom.dy += fy
-                        forces[edge.from] = forceFrom
-                    }
-                    if var forceTo = forces[edge.to] {
-                        forceTo.dx -= fx
-                        forceTo.dy -= fy
-                        forces[edge.to] = forceTo
-                    }
-                }
-            }
-
-            // Apply forces
-            for atom in atoms {
-                guard var pos = positions[atom],
-                      let force = forces[atom] else { continue }
-
-                pos.x += force.dx * 0.1
-                pos.y += force.dy * 0.1
-
-                // Keep in bounds
-                pos.x = max(50, min(size.width - 50, pos.x))
-                pos.y = max(50, min(size.height - 50, pos.y))
-
-                positions[atom] = pos
-            }
-        }
-
-        return positions
-    }
-
-    private func collectAllAtoms(from instance: AlloyInstance) -> [String] {
-        var atoms: Set<String> = []
-        for tuples in instance.signatures.values {
-            for tuple in tuples.sortedTuples {
-                atoms.insert(tuple.first.name)
-            }
-        }
-        return Array(atoms).sorted()
-    }
-
-    private func collectAllEdges(from instance: AlloyInstance) -> [(from: String, to: String)] {
-        var edges: [(from: String, to: String)] = []
-        for tuples in instance.fields.values {
-            for tuple in tuples.sortedTuples where tuple.arity == 2 {
-                edges.append((from: tuple.first.name, to: tuple.last.name))
-            }
-        }
-        return edges
-    }
-
-    private func totalAtomCount(_ instance: AlloyInstance) -> Int {
-        var atoms: Set<String> = []
-        for tuples in instance.signatures.values {
-            for tuple in tuples.sortedTuples {
-                atoms.insert(tuple.first.name)
-            }
-        }
-        return atoms.count
+        return GraphLayoutService.computePositions(for: instance, in: size)
     }
 
     private func drawNode(context: GraphicsContext, at point: CGPoint, name: String, color: Color, isSelected: Bool, isDimmed: Bool = false) {
-        let nodeRadius: CGFloat = 25
-        let opacity: Double = isDimmed ? 0.3 : 1.0
+        let nodeRadius: CGFloat = UIConstants.Graph.nodeRadius
+        let opacity: Double = isDimmed ? UIConstants.Graph.dimmedOpacity : 1.0
 
         // Node circle
         let rect = CGRect(x: point.x - nodeRadius, y: point.y - nodeRadius, width: nodeRadius * 2, height: nodeRadius * 2)
@@ -617,10 +493,7 @@ public struct InstanceView: View {
     }
 
     private func colorForSignature(_ name: String) -> Color {
-        // Generate consistent color based on name hash
-        let hash = abs(name.hashValue)
-        let hue = Double(hash % 360) / 360.0
-        return Color(hue: hue, saturation: 0.6, brightness: 0.7)
+        GraphLayoutService.colorForSignature(name)
     }
 }
 

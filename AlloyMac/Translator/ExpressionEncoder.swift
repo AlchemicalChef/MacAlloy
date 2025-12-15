@@ -319,19 +319,24 @@ public final class ExpressionEncoder {
         return result
     }
 
-    /// Encode domain restriction: s <: r
-    private func encodeDomainRestriction(_ domain: BooleanMatrix, _ relation: BooleanMatrix) -> BooleanMatrix {
-        precondition(domain.arity == 1, "Domain must be unary")
+    /// Generic restriction helper (used for both domain and range restriction)
+    private func encodeRestriction(
+        _ restriction: BooleanMatrix,
+        _ relation: BooleanMatrix,
+        atomSelector: (AtomTuple) -> Atom,
+        restrictionName: String
+    ) -> BooleanMatrix {
+        precondition(restriction.arity == 1, "\(restrictionName) must be unary")
 
         var result = BooleanMatrix(universe: universe, arity: relation.arity)
 
         for tuple in relation.tuples {
-            let firstAtom = tuple.first
-            let domainVal = domain[AtomTuple(firstAtom)]
+            let atom = atomSelector(tuple)
+            let restrictVal = restriction[AtomTuple(atom)]
             let relVal = relation[tuple]
 
-            // result[tuple] = domain[first] & relation[tuple]
-            switch (domainVal, relVal) {
+            // result[tuple] = restriction[atom] & relation[tuple]
+            switch (restrictVal, relVal) {
             case (.constant(false), _), (_, .constant(false)):
                 result[tuple] = .falseValue
             case (.constant(true), let x), (let x, .constant(true)):
@@ -339,7 +344,7 @@ public final class ExpressionEncoder {
             default:
                 let v = cnf.freshVariable()
                 result[tuple] = .variable(v)
-                let formula = BooleanFormula.from(domainVal).and(.from(relVal))
+                let formula = BooleanFormula.from(restrictVal).and(.from(relVal))
                 cnf.assertTrue(BooleanFormula.variable(v).iff(formula))
             }
         }
@@ -347,32 +352,14 @@ public final class ExpressionEncoder {
         return result
     }
 
+    /// Encode domain restriction: s <: r
+    private func encodeDomainRestriction(_ domain: BooleanMatrix, _ relation: BooleanMatrix) -> BooleanMatrix {
+        encodeRestriction(domain, relation, atomSelector: { $0.first }, restrictionName: "Domain")
+    }
+
     /// Encode range restriction: r :> s
     private func encodeRangeRestriction(_ relation: BooleanMatrix, _ range: BooleanMatrix) -> BooleanMatrix {
-        precondition(range.arity == 1, "Range must be unary")
-
-        var result = BooleanMatrix(universe: universe, arity: relation.arity)
-
-        for tuple in relation.tuples {
-            let lastAtom = tuple.last
-            let rangeVal = range[AtomTuple(lastAtom)]
-            let relVal = relation[tuple]
-
-            // result[tuple] = relation[tuple] & range[last]
-            switch (relVal, rangeVal) {
-            case (.constant(false), _), (_, .constant(false)):
-                result[tuple] = .falseValue
-            case (.constant(true), let x), (let x, .constant(true)):
-                result[tuple] = x
-            default:
-                let v = cnf.freshVariable()
-                result[tuple] = .variable(v)
-                let formula = BooleanFormula.from(relVal).and(.from(rangeVal))
-                cnf.assertTrue(BooleanFormula.variable(v).iff(formula))
-            }
-        }
-
-        return result
+        encodeRestriction(range, relation, atomSelector: { $0.last }, restrictionName: "Range")
     }
 
     // MARK: - Unary Expression
@@ -496,7 +483,7 @@ public final class ExpressionEncoder {
             context.diagnostics?.error(
                 .argumentCountMismatch,
                 "Function '\(fun.name)' expects \(fun.parameters.count) argument(s), got \(args.count)",
-                at: SourceSpan.unknown
+                at: SourceSpan.zero
             )
             return context.emptyMatrix(arity: 1)
         }

@@ -582,110 +582,13 @@ struct DiffGraphView: View {
         context.draw(text, at: CGPoint(x: midPoint.x, y: midPoint.y - 10), anchor: .center)
     }
 
-    // MARK: - Position Calculation (copied from InstanceView)
+    // MARK: - Layout Helpers (delegated to GraphLayoutService)
 
     private func computePositions(for instance: AlloyInstance, in size: CGSize) -> [String: CGPoint] {
-        var positions: [String: CGPoint] = [:]
-        let atoms = collectAllAtoms(from: instance)
-        let edges = collectAllEdges(from: instance)
-
-        let center = CGPoint(x: size.width / 2, y: size.height / 2)
-        let radius = min(size.width, size.height) * 0.35
-
-        for (index, atom) in atoms.enumerated() {
-            let angle = 2 * .pi * Double(index) / Double(max(1, atoms.count))
-            positions[atom] = CGPoint(
-                x: center.x + radius * cos(angle),
-                y: center.y + radius * sin(angle)
-            )
-        }
-
-        // Force-directed iterations
-        for _ in 0..<50 {
-            var forces: [String: CGVector] = [:]
-            for atom in atoms { forces[atom] = .zero }
-
-            // Repulsion
-            for i in 0..<atoms.count {
-                for j in (i+1)..<atoms.count {
-                    guard let p1 = positions[atoms[i]], let p2 = positions[atoms[j]] else { continue }
-                    let dx = p2.x - p1.x, dy = p2.y - p1.y
-                    let dist = sqrt(dx * dx + dy * dy)
-                    if dist > 1 {
-                        let force = 5000 / (dist * dist)
-                        let fx = (dx / dist) * force, fy = (dy / dist) * force
-                        if var forceI = forces[atoms[i]] {
-                            forceI.dx -= fx
-                            forceI.dy -= fy
-                            forces[atoms[i]] = forceI
-                        }
-                        if var forceJ = forces[atoms[j]] {
-                            forceJ.dx += fx
-                            forceJ.dy += fy
-                            forces[atoms[j]] = forceJ
-                        }
-                    }
-                }
-            }
-
-            // Attraction
-            for edge in edges {
-                guard let p1 = positions[edge.from], let p2 = positions[edge.to] else { continue }
-                let dx = p2.x - p1.x, dy = p2.y - p1.y
-                let dist = sqrt(dx * dx + dy * dy)
-                if dist > 1 {
-                    let force = dist * 0.01
-                    let fx = (dx / dist) * force, fy = (dy / dist) * force
-                    if var forceFrom = forces[edge.from] {
-                        forceFrom.dx += fx
-                        forceFrom.dy += fy
-                        forces[edge.from] = forceFrom
-                    }
-                    if var forceTo = forces[edge.to] {
-                        forceTo.dx -= fx
-                        forceTo.dy -= fy
-                        forces[edge.to] = forceTo
-                    }
-                }
-            }
-
-            // Apply
-            for atom in atoms {
-                guard var pos = positions[atom], let force = forces[atom] else { continue }
-                pos.x += force.dx * 0.1
-                pos.y += force.dy * 0.1
-                pos.x = max(50, min(size.width - 50, pos.x))
-                pos.y = max(50, min(size.height - 50, pos.y))
-                positions[atom] = pos
-            }
-        }
-
-        return positions
-    }
-
-    private func collectAllAtoms(from instance: AlloyInstance) -> [String] {
-        var atoms: Set<String> = []
-        for tuples in instance.signatures.values {
-            for tuple in tuples.sortedTuples {
-                atoms.insert(tuple.first.name)
-            }
-        }
-        return Array(atoms).sorted()
-    }
-
-    private func collectAllEdges(from instance: AlloyInstance) -> [(from: String, to: String)] {
-        var edges: [(from: String, to: String)] = []
-        for tuples in instance.fields.values {
-            for tuple in tuples.sortedTuples where tuple.arity == 2 {
-                edges.append((from: tuple.first.name, to: tuple.last.name))
-            }
-        }
-        return edges
+        GraphLayoutService.computePositions(for: instance, in: size)
     }
 
     private func colorForSignature(_ name: String) -> Color {
-        let hash = abs(name.hashValue)
-        let hue = Double(hash % 360) / 360.0
-        return Color(hue: hue, saturation: 0.6, brightness: 0.7)
+        GraphLayoutService.colorForSignature(name)
     }
 }

@@ -1,12 +1,6 @@
 import XCTest
 @testable import AlloyMac
 
-/// Simple error for test failures
-enum TestError: Error {
-    case parseFailed
-    case analysisError(String)
-}
-
 final class TranslatorTests: XCTestCase {
 
     // MARK: - Helper Functions

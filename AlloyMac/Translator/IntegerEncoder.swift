@@ -107,40 +107,33 @@ public final class IntegerEncoder {
 
     // MARK: - Arithmetic Operations
 
-    /// Encode addition: plus[a, b]
-    public func encodePlus(_ leftMatrix: BooleanMatrix, _ rightMatrix: BooleanMatrix) -> BooleanMatrix {
+    /// Generic binary arithmetic operation helper
+    private func binaryArithOp(
+        _ leftMatrix: BooleanMatrix,
+        _ rightMatrix: BooleanMatrix,
+        operation: (IntegerArithmetic, BitVector, BitVector) -> BitVector
+    ) -> BooleanMatrix {
         guard let arith = arithmetic,
               let leftBV = matrixToBitVector(leftMatrix),
               let rightBV = matrixToBitVector(rightMatrix) else {
             return context.emptyMatrix(arity: 1)
         }
+        return bitVectorToMatrix(operation(arith, leftBV, rightBV))
+    }
 
-        let result = arith.add(leftBV, rightBV)
-        return bitVectorToMatrix(result)
+    /// Encode addition: plus[a, b]
+    public func encodePlus(_ leftMatrix: BooleanMatrix, _ rightMatrix: BooleanMatrix) -> BooleanMatrix {
+        binaryArithOp(leftMatrix, rightMatrix) { $0.add($1, $2) }
     }
 
     /// Encode subtraction: minus[a, b]
     public func encodeMinus(_ leftMatrix: BooleanMatrix, _ rightMatrix: BooleanMatrix) -> BooleanMatrix {
-        guard let arith = arithmetic,
-              let leftBV = matrixToBitVector(leftMatrix),
-              let rightBV = matrixToBitVector(rightMatrix) else {
-            return context.emptyMatrix(arity: 1)
-        }
-
-        let result = arith.subtract(leftBV, rightBV)
-        return bitVectorToMatrix(result)
+        binaryArithOp(leftMatrix, rightMatrix) { $0.subtract($1, $2) }
     }
 
     /// Encode multiplication: mul[a, b]
     public func encodeMul(_ leftMatrix: BooleanMatrix, _ rightMatrix: BooleanMatrix) -> BooleanMatrix {
-        guard let arith = arithmetic,
-              let leftBV = matrixToBitVector(leftMatrix),
-              let rightBV = matrixToBitVector(rightMatrix) else {
-            return context.emptyMatrix(arity: 1)
-        }
-
-        let result = arith.multiply(leftBV, rightBV)
-        return bitVectorToMatrix(result)
+        binaryArithOp(leftMatrix, rightMatrix) { $0.multiply($1, $2) }
     }
 
     /// Encode division: div[a, b]
@@ -150,7 +143,6 @@ public final class IntegerEncoder {
               let rightBV = matrixToBitVector(rightMatrix) else {
             return context.emptyMatrix(arity: 1)
         }
-
         let (quotient, _) = arith.divRem(leftBV, rightBV)
         return bitVectorToMatrix(quotient)
     }
@@ -162,7 +154,6 @@ public final class IntegerEncoder {
               let rightBV = matrixToBitVector(rightMatrix) else {
             return context.emptyMatrix(arity: 1)
         }
-
         let (_, remainder) = arith.divRem(leftBV, rightBV)
         return bitVectorToMatrix(remainder)
     }
@@ -253,92 +244,61 @@ public final class IntegerEncoder {
         return sumBV
     }
 
-    /// Encode less than: a < b
-    /// Per Alloy spec: sum is applied implicitly to arguments
-    public func encodeLessThan(_ leftMatrix: BooleanMatrix, _ rightMatrix: BooleanMatrix) -> BooleanFormula {
+    /// Generic comparison operation helper (uses sumOfIntegers for implicit sum)
+    private func binaryCompareOp(
+        _ leftMatrix: BooleanMatrix,
+        _ rightMatrix: BooleanMatrix,
+        operation: (IntegerArithmetic, BitVector, BitVector) -> BooleanFormula
+    ) -> BooleanFormula {
         guard let arith = arithmetic,
               let leftBV = sumOfIntegers(leftMatrix),
               let rightBV = sumOfIntegers(rightMatrix) else {
             return .constant(false)
         }
+        return operation(arith, leftBV, rightBV)
+    }
 
-        return arith.lessThan(leftBV, rightBV)
+    /// Encode less than: a < b
+    /// Per Alloy spec: sum is applied implicitly to arguments
+    public func encodeLessThan(_ leftMatrix: BooleanMatrix, _ rightMatrix: BooleanMatrix) -> BooleanFormula {
+        binaryCompareOp(leftMatrix, rightMatrix) { $0.lessThan($1, $2) }
     }
 
     /// Encode less than or equal: a <= b
     /// Per Alloy spec: sum is applied implicitly to arguments
     public func encodeLessThanOrEqual(_ leftMatrix: BooleanMatrix, _ rightMatrix: BooleanMatrix) -> BooleanFormula {
-        guard let arith = arithmetic,
-              let leftBV = sumOfIntegers(leftMatrix),
-              let rightBV = sumOfIntegers(rightMatrix) else {
-            return .constant(false)
-        }
-
-        return arith.lessThanOrEqual(leftBV, rightBV)
+        binaryCompareOp(leftMatrix, rightMatrix) { $0.lessThanOrEqual($1, $2) }
     }
 
     /// Encode greater than: a > b
     /// Per Alloy spec: sum is applied implicitly to arguments
     public func encodeGreaterThan(_ leftMatrix: BooleanMatrix, _ rightMatrix: BooleanMatrix) -> BooleanFormula {
-        guard let arith = arithmetic,
-              let leftBV = sumOfIntegers(leftMatrix),
-              let rightBV = sumOfIntegers(rightMatrix) else {
-            return .constant(false)
-        }
-
-        return arith.greaterThan(leftBV, rightBV)
+        binaryCompareOp(leftMatrix, rightMatrix) { $0.greaterThan($1, $2) }
     }
 
     /// Encode greater than or equal: a >= b
     /// Per Alloy spec: sum is applied implicitly to arguments
     public func encodeGreaterThanOrEqual(_ leftMatrix: BooleanMatrix, _ rightMatrix: BooleanMatrix) -> BooleanFormula {
-        guard let arith = arithmetic,
-              let leftBV = sumOfIntegers(leftMatrix),
-              let rightBV = sumOfIntegers(rightMatrix) else {
-            return .constant(false)
-        }
-
-        return arith.greaterThanOrEqual(leftBV, rightBV)
+        binaryCompareOp(leftMatrix, rightMatrix) { $0.greaterThanOrEqual($1, $2) }
     }
 
     // MARK: - Bit Shift Operations
 
     /// Encode left shift: a << b (shl)
     public func encodeShiftLeft(_ leftMatrix: BooleanMatrix, _ rightMatrix: BooleanMatrix) -> BooleanMatrix {
-        guard let arith = arithmetic,
-              let leftBV = matrixToBitVector(leftMatrix),
-              let rightBV = matrixToBitVector(rightMatrix) else {
-            return context.emptyMatrix(arity: 1)
-        }
-
-        let result = arith.shiftLeftBV(leftBV, rightBV)
-        return bitVectorToMatrix(result)
+        binaryArithOp(leftMatrix, rightMatrix) { $0.shiftLeftBV($1, $2) }
     }
 
     /// Encode arithmetic (signed) right shift: a >> b (sha)
     /// Sign-extends the result
     public func encodeShiftRightArithmetic(_ leftMatrix: BooleanMatrix, _ rightMatrix: BooleanMatrix) -> BooleanMatrix {
-        guard let arith = arithmetic,
-              let leftBV = matrixToBitVector(leftMatrix),
-              let rightBV = matrixToBitVector(rightMatrix) else {
-            return context.emptyMatrix(arity: 1)
-        }
-
-        let result = arith.shiftRightArithmetic(leftBV, rightBV)
-        return bitVectorToMatrix(result)
+        binaryArithOp(leftMatrix, rightMatrix) { $0.shiftRightArithmetic($1, $2) }
     }
 
     /// Encode logical (unsigned) right shift: a >>> b (shr)
     /// Zero-fills the result
     public func encodeShiftRightLogical(_ leftMatrix: BooleanMatrix, _ rightMatrix: BooleanMatrix) -> BooleanMatrix {
-        guard let arith = arithmetic,
-              let leftBV = matrixToBitVector(leftMatrix),
-              let rightBV = matrixToBitVector(rightMatrix) else {
-            return context.emptyMatrix(arity: 1)
-        }
-
-        let result = arith.shiftRightLogical(leftBV, rightBV)
-        return bitVectorToMatrix(result)
+        binaryArithOp(leftMatrix, rightMatrix) { $0.shiftRightLogical($1, $2) }
     }
 
     // MARK: - Sum Quantifier

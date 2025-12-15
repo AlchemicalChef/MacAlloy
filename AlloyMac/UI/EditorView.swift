@@ -74,7 +74,7 @@ struct LineNumberGutter: View {
         max(1, text.components(separatedBy: "\n").count)
     }
 
-    private let lineHeight: CGFloat = 17
+    private let lineHeight: CGFloat = UIConstants.Editor.lineHeight
 
     var body: some View {
         GeometryReader { geometry in

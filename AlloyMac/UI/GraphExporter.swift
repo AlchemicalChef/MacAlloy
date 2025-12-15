@@ -320,116 +320,14 @@ public struct GraphExporter {
             .replacingOccurrences(of: "'", with: "&apos;")
     }
 
-    // MARK: - Position Calculation (duplicated from InstanceView for independence)
+    // MARK: - Layout Helpers (delegated to GraphLayoutService)
 
     private static func computePositions(for instance: AlloyInstance, in size: CGSize) -> [String: CGPoint] {
-        var positions: [String: CGPoint] = [:]
-
-        let atoms = collectAllAtoms(from: instance)
-        let edges = collectAllEdges(from: instance)
-
-        // Initial placement in a circle
-        let center = CGPoint(x: size.width / 2, y: size.height / 2)
-        let radius = min(size.width, size.height) * 0.35
-
-        for (index, atom) in atoms.enumerated() {
-            let angle = 2 * .pi * Double(index) / Double(max(1, atoms.count))
-            let x = center.x + radius * cos(angle)
-            let y = center.y + radius * sin(angle)
-            positions[atom] = CGPoint(x: x, y: y)
-        }
-
-        // Force-directed iterations
-        for _ in 0..<50 {
-            var forces: [String: CGVector] = [:]
-            for atom in atoms {
-                forces[atom] = .zero
-            }
-
-            // Repulsion
-            for i in 0..<atoms.count {
-                for j in (i+1)..<atoms.count {
-                    guard let p1 = positions[atoms[i]],
-                          let p2 = positions[atoms[j]] else { continue }
-
-                    let dx = p2.x - p1.x
-                    let dy = p2.y - p1.y
-                    let dist = sqrt(dx * dx + dy * dy)
-                    if dist > 1 {
-                        let force = 5000 / (dist * dist)
-                        let fx = (dx / dist) * force
-                        let fy = (dy / dist) * force
-
-                        forces[atoms[i]]!.dx -= fx
-                        forces[atoms[i]]!.dy -= fy
-                        forces[atoms[j]]!.dx += fx
-                        forces[atoms[j]]!.dy += fy
-                    }
-                }
-            }
-
-            // Attraction
-            for edge in edges {
-                guard let p1 = positions[edge.from],
-                      let p2 = positions[edge.to] else { continue }
-
-                let dx = p2.x - p1.x
-                let dy = p2.y - p1.y
-                let dist = sqrt(dx * dx + dy * dy)
-                if dist > 1 {
-                    let force = dist * 0.01
-                    let fx = (dx / dist) * force
-                    let fy = (dy / dist) * force
-
-                    forces[edge.from]!.dx += fx
-                    forces[edge.from]!.dy += fy
-                    forces[edge.to]!.dx -= fx
-                    forces[edge.to]!.dy -= fy
-                }
-            }
-
-            // Apply forces
-            for atom in atoms {
-                guard var pos = positions[atom],
-                      let force = forces[atom] else { continue }
-
-                pos.x += force.dx * 0.1
-                pos.y += force.dy * 0.1
-
-                pos.x = max(50, min(size.width - 50, pos.x))
-                pos.y = max(50, min(size.height - 50, pos.y))
-
-                positions[atom] = pos
-            }
-        }
-
-        return positions
-    }
-
-    private static func collectAllAtoms(from instance: AlloyInstance) -> [String] {
-        var atoms: Set<String> = []
-        for tuples in instance.signatures.values {
-            for tuple in tuples.sortedTuples {
-                atoms.insert(tuple.first.name)
-            }
-        }
-        return Array(atoms).sorted()
-    }
-
-    private static func collectAllEdges(from instance: AlloyInstance) -> [(from: String, to: String)] {
-        var edges: [(from: String, to: String)] = []
-        for tuples in instance.fields.values {
-            for tuple in tuples.sortedTuples where tuple.arity == 2 {
-                edges.append((from: tuple.first.name, to: tuple.last.name))
-            }
-        }
-        return edges
+        GraphLayoutService.computePositions(for: instance, in: size)
     }
 
     private static func colorForSignature(_ name: String) -> NSColor {
-        let hash = abs(name.hashValue)
-        let hue = CGFloat(hash % 360) / 360.0
-        return NSColor(hue: hue, saturation: 0.6, brightness: 0.7, alpha: 1.0)
+        GraphLayoutService.nsColorForSignature(name)
     }
 }
 

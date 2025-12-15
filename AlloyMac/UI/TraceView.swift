@@ -33,7 +33,7 @@ public struct TraceView: View {
                 // Start Task-based playback timer
                 playbackTask = Task { @MainActor in
                     while !Task.isCancelled && isPlaying {
-                        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                        try? await Task.sleep(nanoseconds: UIConstants.Animation.playbackIntervalNanoseconds)
                         if !Task.isCancelled && isPlaying {
                             advanceState()
                         }

@@ -249,29 +249,12 @@ public final class FormulaEncoder {
 
     /// Encode exactly-one constraint
     private func encodeExactlyOne(_ formulas: [BooleanFormula]) -> BooleanFormula {
-        // At least one
-        let atLeastOne = BooleanFormula.disjunction(formulas)
-
-        // At most one: for each pair, not both
-        var atMostOne: [BooleanFormula] = []
-        for i in 0..<formulas.count {
-            for j in (i+1)..<formulas.count {
-                atMostOne.append(.disjunction([formulas[i].negated, formulas[j].negated]))
-            }
-        }
-
-        return atLeastOne.and(.conjunction(atMostOne))
+        ConstraintHelpers.exactlyOne(formulas)
     }
 
     /// Encode at-most-one constraint
     private func encodeAtMostOne(_ formulas: [BooleanFormula]) -> BooleanFormula {
-        var constraints: [BooleanFormula] = []
-        for i in 0..<formulas.count {
-            for j in (i+1)..<formulas.count {
-                constraints.append(.disjunction([formulas[i].negated, formulas[j].negated]))
-            }
-        }
-        return .conjunction(constraints)
+        ConstraintHelpers.atMostOne(formulas)
     }
 
     // MARK: - Comparison Formula
@@ -312,18 +295,13 @@ public final class FormulaEncoder {
 
     /// Encode a let formula
     private func encodeLetFormula(_ formula: LetFormula) -> BooleanFormula {
-        context.pushScope()
-
-        for binding in formula.bindings {
-            let value = exprEncoder.encode(binding.value)
-            context.bind(binding.name.name, to: value)
+        context.withScope {
+            for binding in formula.bindings {
+                let value = exprEncoder.encode(binding.value)
+                context.bind(binding.name.name, to: value)
+            }
+            return encode(formula.body)
         }
-
-        let result = encode(formula.body)
-
-        context.popScope()
-
-        return result
     }
 
     // MARK: - Block Formula
@@ -374,31 +352,27 @@ public final class FormulaEncoder {
             context.diagnostics?.error(
                 .argumentCountMismatch,
                 "Predicate '\(pred.fullName)' expects \(pred.parameters.count) argument(s), got \(args.count)",
-                at: SourceSpan.unknown
+                at: SourceSpan.zero
             )
             return .trueFormula
         }
 
-        context.pushScope()
+        return context.withScope {
+            // Bind parameters
+            for (param, arg) in zip(pred.parameters, args) {
+                let argMatrix = exprEncoder.encode(arg)
+                context.bind(param.name, to: argMatrix)
+            }
 
-        // Bind parameters
-        for (param, arg) in zip(pred.parameters, args) {
-            let argMatrix = exprEncoder.encode(arg)
-            context.bind(param.name, to: argMatrix)
+            // Handle receiver for method-style predicates
+            if let _ = pred.receiver, args.count > pred.parameters.count {
+                // First argument is the receiver
+                let receiverArg = exprEncoder.encode(args[0])
+                context.bind("this", to: receiverArg)
+            }
+
+            return encode(body)
         }
-
-        // Handle receiver for method-style predicates
-        if let receiver = pred.receiver, args.count > pred.parameters.count {
-            // First argument is the receiver
-            let receiverArg = exprEncoder.encode(args[0])
-            context.bind("this", to: receiverArg)
-        }
-
-        let result = encode(body)
-
-        context.popScope()
-
-        return result
     }
 
     // MARK: - Multiplicity Formula
@@ -432,15 +406,9 @@ public final class FormulaEncoder {
 
     /// Encode at-most-one constraint for a matrix
     private func encodeAtMostOneInMatrix(_ matrix: BooleanMatrix) -> BooleanFormula {
-        var constraints: [BooleanFormula] = []
-        for i in 0..<matrix.count {
-            for j in (i+1)..<matrix.count {
-                let vi = BooleanFormula.from(matrix[i])
-                let vj = BooleanFormula.from(matrix[j])
-                constraints.append(.disjunction([vi.negated, vj.negated]))
-            }
-        }
-        return .conjunction(constraints)
+        // Convert matrix values to formulas
+        let formulas = (0..<matrix.count).map { BooleanFormula.from(matrix[$0]) }
+        return ConstraintHelpers.atMostOne(formulas)
     }
 
     // MARK: - Expression as Formula

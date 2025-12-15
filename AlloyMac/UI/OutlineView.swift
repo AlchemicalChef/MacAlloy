@@ -120,71 +120,71 @@ public struct OutlineView: View {
     }
 
     /// Build hierarchical view for a signature and its children
-    @ViewBuilder
-    private func signatureHierarchyView(_ sig: SigSymbol, depth: Int = 0) -> some View {
+    private func signatureHierarchyView(_ sig: SigSymbol, depth: Int = 0) -> AnyView {
         let children = childSignatures(of: sig)
         let sigPreds = predicates(for: sig)
         let sigFuns = functions(for: sig)
-        let hasMembers = !sig.fields.isEmpty || !children.isEmpty || !sigPreds.isEmpty || !sigFuns.isEmpty
 
-        DisclosureGroup {
-            // Fields
-            ForEach(sig.fields, id: \.name) { field in
-                OutlineRow(
-                    icon: "arrow.right.circle",
-                    iconColor: .secondary,
-                    title: field.name,
-                    subtitle: "\(field.type)",
-                    isVariable: field.isVariable
-                ) {
-                    onItemSelected(field.definedAt)
+        return AnyView(
+            DisclosureGroup {
+                // Fields
+                ForEach(sig.fields, id: \.name) { field in
+                    OutlineRow(
+                        icon: "arrow.right.circle",
+                        iconColor: .secondary,
+                        title: field.name,
+                        subtitle: "\(field.type)",
+                        isVariable: field.isVariable
+                    ) {
+                        onItemSelected(field.definedAt)
+                    }
+                    .padding(.leading, 8)
                 }
-                .padding(.leading, 8)
-            }
 
-            // Method-style predicates for this signature
-            ForEach(sigPreds, id: \.name) { pred in
-                OutlineRow(
-                    icon: "function",
-                    iconColor: .purple.opacity(0.7),
-                    title: pred.name,
-                    subtitle: predSubtitle(pred)
-                ) {
-                    onItemSelected(pred.definedAt)
+                // Method-style predicates for this signature
+                ForEach(sigPreds, id: \.name) { pred in
+                    OutlineRow(
+                        icon: "function",
+                        iconColor: .purple.opacity(0.7),
+                        title: pred.name,
+                        subtitle: predSubtitle(pred)
+                    ) {
+                        onItemSelected(pred.definedAt)
+                    }
+                    .padding(.leading, 8)
                 }
-                .padding(.leading, 8)
-            }
 
-            // Method-style functions for this signature
-            ForEach(sigFuns, id: \.name) { fun in
-                OutlineRow(
-                    icon: "f.cursive",
-                    iconColor: .orange.opacity(0.7),
-                    title: fun.name,
-                    subtitle: funSubtitle(fun)
-                ) {
-                    onItemSelected(fun.definedAt)
+                // Method-style functions for this signature
+                ForEach(sigFuns, id: \.name) { fun in
+                    OutlineRow(
+                        icon: "f.cursive",
+                        iconColor: .orange.opacity(0.7),
+                        title: fun.name,
+                        subtitle: funSubtitle(fun)
+                    ) {
+                        onItemSelected(fun.definedAt)
+                    }
+                    .padding(.leading, 8)
                 }
-                .padding(.leading, 8)
-            }
 
-            // Child signatures (nested hierarchy)
-            ForEach(children, id: \.name) { child in
-                signatureHierarchyView(child, depth: depth + 1)
-                    .padding(.leading, 4)
+                // Child signatures (nested hierarchy)
+                ForEach(children, id: \.name) { child in
+                    signatureHierarchyView(child, depth: depth + 1)
+                        .padding(.leading, 4)
+                }
+            } label: {
+                OutlineRow(
+                    icon: depth == 0 ? "cube" : "cube.fill",
+                    iconColor: depth == 0 ? .blue : .blue.opacity(0.7),
+                    title: sig.name,
+                    subtitle: sigSubtitle(sig),
+                    isVariable: sig.sigType.isVariable,
+                    isAbstract: sig.sigType.isAbstract
+                ) {
+                    onItemSelected(sig.definedAt)
+                }
             }
-        } label: {
-            OutlineRow(
-                icon: depth == 0 ? "cube" : "cube.fill",
-                iconColor: depth == 0 ? .blue : .blue.opacity(0.7),
-                title: sig.name,
-                subtitle: sigSubtitle(sig),
-                isVariable: sig.sigType.isVariable,
-                isAbstract: sig.sigType.isAbstract
-            ) {
-                onItemSelected(sig.definedAt)
-            }
-        }
+        )
     }
 
     // MARK: - Helpers
