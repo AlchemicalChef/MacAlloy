@@ -477,4 +477,115 @@ final class SemanticTests: XCTestCase {
         let moodField = person?.fields.first { $0.name == "mood" }
         XCTAssertTrue(moodField?.isVariable ?? false)
     }
+
+    // MARK: - Circular Dependency Detection Tests
+
+    func testCircularInheritanceSelfExtends() {
+        // sig A extends A {} should produce an error, not an infinite loop
+        let analyzer = analyze("sig A extends A {}")
+        XCTAssertTrue(analyzer.hasErrors, "Self-extending signature should produce an error")
+        // Should detect cyclic inheritance
+        XCTAssertTrue(analyzer.diagnostics.errors.contains {
+            $0.code == .cyclicInheritance || $0.code == .undefinedSignature
+        }, "Should report cyclic inheritance or undefined signature error")
+    }
+
+    func testCircularInheritanceChainTwo() {
+        // sig A extends B {} sig B extends A {} should produce an error
+        let analyzer = analyze("""
+            sig A extends B {}
+            sig B extends A {}
+            """)
+        XCTAssertTrue(analyzer.hasErrors, "Circular inheritance chain should produce an error")
+    }
+
+    func testCircularInheritanceChainThree() {
+        // A→B→C→A should produce an error
+        let analyzer = analyze("""
+            sig A extends C {}
+            sig B extends A {}
+            sig C extends B {}
+            """)
+        XCTAssertTrue(analyzer.hasErrors, "Circular inheritance chain should produce an error")
+    }
+
+    func testCircularSubsetIn() {
+        // sig A in B {} sig B in A {} - circular subset relationship
+        let analyzer = analyze("""
+            sig Base {}
+            sig A in B {}
+            sig B in A {}
+            """)
+        // This may or may not be an error depending on semantics, but shouldn't hang
+        // The analyzer should complete (not hang)
+        XCTAssertNotNil(analyzer.symbolTable)
+    }
+
+    func testDeepInheritanceChainNoCircle() {
+        // Valid deep chain: A→B→C→D→E should work
+        let analyzer = analyze("""
+            sig E {}
+            sig D extends E {}
+            sig C extends D {}
+            sig B extends C {}
+            sig A extends B {}
+            """)
+        XCTAssertFalse(analyzer.hasErrors, "Deep non-circular inheritance should work")
+        let a = analyzer.symbolTable.lookupSig("A")
+        XCTAssertEqual(a?.ancestors.count, 4)
+    }
+
+    // MARK: - Scope and Shadowing Tests
+
+    func testNestedQuantifierShadowing() {
+        // Inner x should shadow outer x
+        let analyzer = analyze("""
+            sig A {}
+            sig B {}
+            fact {
+                all x: A | all x: B | x in B
+            }
+            """)
+        // Should not error - inner x shadows outer x
+        XCTAssertFalse(analyzer.hasErrors, "Nested quantifier shadowing should be allowed")
+    }
+
+    func testLetBindingShadowing() {
+        let analyzer = analyze("""
+            sig A {}
+            fact {
+                let x = A | let x = univ | x = univ
+            }
+            """)
+        // Should not error - let binding shadows
+        XCTAssertFalse(analyzer.hasErrors, "Let binding shadowing should be allowed")
+    }
+
+    // MARK: - Edge Case Tests
+
+    func testEmptyFactBody() {
+        let analyzer = analyze("""
+            sig A {}
+            fact Empty { }
+            """)
+        // Empty fact should be valid (implicit true)
+        XCTAssertFalse(analyzer.hasErrors)
+    }
+
+    func testMultipleFieldsSameName() {
+        // Same field name in different signatures should be allowed
+        let analyzer = analyze("""
+            sig A { value: Int }
+            sig B { value: Int }
+            """)
+        XCTAssertFalse(analyzer.hasErrors, "Same field name in different sigs should be allowed")
+    }
+
+    func testFieldSameNameAsSignature() {
+        let analyzer = analyze("""
+            sig Person { Person: set Person }
+            """)
+        // Field with same name as signature - should work (different namespaces)
+        XCTAssertFalse(analyzer.hasErrors, "Field can have same name as signature")
+    }
 }

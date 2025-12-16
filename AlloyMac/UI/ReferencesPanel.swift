@@ -1,5 +1,9 @@
 import SwiftUI
 
+#if os(macOS)
+import AppKit
+#endif
+
 // MARK: - References Panel
 
 /// Panel showing all references to a symbol
@@ -46,7 +50,7 @@ public struct ReferencesPanel: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(nsColor: .controlBackgroundColor))
+            .background(PlatformColors.controlBackground)
 
             Divider()
 
@@ -74,7 +78,7 @@ public struct ReferencesPanel: View {
             }
         }
         .frame(height: 150)
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(PlatformColors.textBackground)
     }
 }
 

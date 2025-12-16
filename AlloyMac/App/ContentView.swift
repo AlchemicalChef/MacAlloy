@@ -1,6 +1,10 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+#if os(macOS)
+import AppKit
+#endif
+
 /// Main content view for the Alloy IDE
 struct ContentView: View {
     @StateObject private var document = AlloyDocument(
@@ -621,7 +625,7 @@ struct ContentView: View {
             .disabled(document.isAnalyzing || document.isSolving)
         }
         .padding()
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(PlatformColors.windowBackground)
     }
 
     // MARK: - Scope Configuration

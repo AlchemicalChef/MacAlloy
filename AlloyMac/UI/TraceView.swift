@@ -1,6 +1,10 @@
 import SwiftUI
 import Combine
 
+#if os(macOS)
+import AppKit
+#endif
+
 // MARK: - Trace View
 
 /// Visualizes a temporal trace showing state evolution over time
@@ -121,7 +125,7 @@ public struct TraceView: View {
             }
         }
         .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(PlatformColors.controlBackground)
     }
 
     private func timelineSidebar(trace: AlloyTrace) -> some View {
@@ -182,7 +186,7 @@ public struct TraceView: View {
             }
         }
         .frame(width: 140)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(PlatformColors.controlBackground)
     }
 
     private func stateContent(instance: AlloyInstance, trace: AlloyTrace) -> some View {
@@ -307,7 +311,7 @@ public struct TraceView: View {
             }
         }
         .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(PlatformColors.controlBackground)
     }
 
     // MARK: - Actions

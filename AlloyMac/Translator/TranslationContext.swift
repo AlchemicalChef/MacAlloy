@@ -96,7 +96,15 @@ public final class TranslationContext {
         // Initialize matrices for signatures
         for (sigName, atoms) in sigAtoms {
             let tupleSet = TupleSet(atoms: atoms)
-            sigMatrices[sigName] = BooleanMatrix(constant: tupleSet, universe: universe)
+            // Check if this is a subset signature - needs SAT variables
+            if let sig = symbolTable.signatures[sigName], !sig.subsetOf.isEmpty {
+                // Subset signature: use SAT variables for membership
+                let bounds = RelationBounds(name: sigName, lower: TupleSet([]), upper: tupleSet)
+                sigMatrices[sigName] = BooleanMatrix(bounds: bounds, universe: universe, cnf: cnf)
+            } else {
+                // Regular signature: constant membership
+                sigMatrices[sigName] = BooleanMatrix(constant: tupleSet, universe: universe)
+            }
         }
 
         // Check if temporal model needed
@@ -185,6 +193,11 @@ public final class TranslationContext {
                 continue
             }
 
+            // Skip subset signatures (sig X in Y) - they share atoms with superset
+            if !sig.subsetOf.isEmpty {
+                continue
+            }
+
             // Determine scope for this signature
             let (scope, isExact) = scopeMap[sigName] ?? (defaultScope, false)
 
@@ -216,6 +229,21 @@ public final class TranslationContext {
                 allAtomNames.append(atomName)
             }
             sigAtoms[sigName] = atoms
+        }
+
+        // Handle subset signatures (sig X in Y) - they share atoms with superset
+        for sig in sortedSigs {
+            if !sig.subsetOf.isEmpty {
+                // Collect all atoms from all superset signatures
+                var supersetAtoms: [Atom] = []
+                for superSig in sig.subsetOf {
+                    if let atoms = sigAtoms[superSig.name] {
+                        supersetAtoms.append(contentsOf: atoms)
+                    }
+                }
+                // Remove duplicates and sort by index
+                sigAtoms[sig.name] = Array(Set(supersetAtoms)).sorted { $0.index < $1.index }
+            }
         }
 
         // Now fix up abstract signatures to include child atoms

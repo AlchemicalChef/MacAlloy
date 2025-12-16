@@ -860,4 +860,140 @@ final class ParserTests: XCTestCase {
         // Should have at least the sig
         XCTAssertGreaterThanOrEqual(module?.paragraphs.count ?? 0, 1)
     }
+
+    // MARK: - Crash Resistance Tests
+
+    func testUnterminatedStringAtEOF() {
+        // Parser should not crash on unterminated string at end of file
+        let parser = Parser(source: """
+            sig A { name: "unterminated
+            """)
+        _ = parser.parse()
+        // Should produce errors but not crash
+        XCTAssertFalse(parser.getErrors().isEmpty)
+    }
+
+    func testUnterminatedBlockCommentAtEOF() {
+        // Parser should not crash on unterminated block comment
+        let parser = Parser(source: """
+            sig A {}
+            /* this comment is never closed
+            """)
+        let module = parser.parse()
+        // Should handle gracefully
+        XCTAssertNotNil(module)
+    }
+
+    func testMixedLineEndings() {
+        // Parser should handle mixed CRLF and LF line endings
+        let source = "sig A {}\r\nsig B {}\nsig C {}\r\n"
+        let module = parse(source)
+        XCTAssertNotNil(module)
+        XCTAssertEqual(module?.paragraphs.count, 3)
+    }
+
+    func testEmptySource() {
+        let module = parse("")
+        XCTAssertNotNil(module)
+        XCTAssertEqual(module?.paragraphs.count, 0)
+    }
+
+    func testOnlyWhitespace() {
+        let module = parse("   \n\t\n   ")
+        XCTAssertNotNil(module)
+        XCTAssertEqual(module?.paragraphs.count, 0)
+    }
+
+    func testOnlyComments() {
+        let module = parse("""
+            // Line comment
+            /* Block comment */
+            -- Another line comment
+            """)
+        XCTAssertNotNil(module)
+        XCTAssertEqual(module?.paragraphs.count, 0)
+    }
+
+    func testDeeplyNestedParentheses() {
+        // Generate deeply nested expression
+        var source = "fact { "
+        for _ in 0..<100 {
+            source += "(("
+        }
+        source += "A"
+        for _ in 0..<100 {
+            source += "))"
+        }
+        source += " }"
+
+        let parser = Parser(source: source)
+        let module = parser.parse()
+        // Should handle deep nesting without stack overflow
+        XCTAssertNotNil(module)
+    }
+
+    func testDeeplyNestedBraces() {
+        // Nested blocks
+        var source = ""
+        for _ in 0..<50 {
+            source += "fact { "
+        }
+        source += "A = A"
+        for _ in 0..<50 {
+            source += " }"
+        }
+
+        let parser = Parser(source: source)
+        _ = parser.parse()
+        // Should not crash
+    }
+
+    func testMalformedUTF8Recovery() {
+        // Test with some unusual unicode
+        let source = "sig Prénom { émoji: set 日本語 }"
+        let module = parse(source)
+        XCTAssertNotNil(module)
+    }
+
+    func testUnexpectedEOFInSignature() {
+        let parser = Parser(source: "sig A {")
+        _ = parser.parse()
+        // Should report error but not crash
+        XCTAssertFalse(parser.getErrors().isEmpty)
+    }
+
+    func testUnexpectedEOFInPredicate() {
+        let parser = Parser(source: "pred foo {")
+        _ = parser.parse()
+        XCTAssertFalse(parser.getErrors().isEmpty)
+    }
+
+    func testUnexpectedEOFInQuantifier() {
+        let parser = Parser(source: "fact { all x:")
+        _ = parser.parse()
+        XCTAssertFalse(parser.getErrors().isEmpty)
+    }
+
+    func testConsecutiveOperators() {
+        // Multiple operators in a row - should error gracefully
+        let parser = Parser(source: "fact { A ++ -- !! B }")
+        _ = parser.parse()
+        // Should not crash
+    }
+
+    func testVeryLongIdentifier() {
+        let longName = String(repeating: "a", count: 10000)
+        let source = "sig \(longName) {}"
+        let module = parse(source)
+        XCTAssertNotNil(module)
+        let sig = module?.paragraphs.first as? SigDeclNode
+        XCTAssertEqual(sig?.names.first?.name, longName)
+    }
+
+    func testVeryLongInteger() {
+        let parser = Parser(source: "fact { #A = 99999999999999999999999999999999 }")
+        let module = parser.parse()
+        // Should handle large integer somehow (truncate, error, or parse)
+        XCTAssertNotNil(module)
+    }
 }

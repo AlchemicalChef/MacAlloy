@@ -1,5 +1,9 @@
 import SwiftUI
 
+#if os(macOS)
+import AppKit
+#endif
+
 // MARK: - Report View
 
 /// Aesthetically pleasing validation report view with dark/light mode support
@@ -518,7 +522,7 @@ public struct ReportView: View {
     // MARK: - Colors
 
     private var backgroundColor: Color {
-        colorScheme == .dark ? Color(white: 0.1) : Color(nsColor: .windowBackgroundColor)
+        colorScheme == .dark ? Color(white: 0.1) : PlatformColors.windowBackground
     }
 
     private var cardBackground: Color {
@@ -526,7 +530,7 @@ public struct ReportView: View {
     }
 
     private var tableHeaderBackground: Color {
-        colorScheme == .dark ? Color(white: 0.2) : Color(nsColor: .controlBackgroundColor)
+        colorScheme == .dark ? Color(white: 0.2) : PlatformColors.controlBackground
     }
 
     private var summaryGradient: LinearGradient {
@@ -565,7 +569,7 @@ private struct StatBox: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
-        .background(colorScheme == .dark ? Color(white: 0.12) : Color(nsColor: .controlBackgroundColor))
+        .background(colorScheme == .dark ? Color(white: 0.12) : PlatformColors.controlBackground)
         .cornerRadius(8)
     }
 }
@@ -588,7 +592,7 @@ private struct MiniStatBox: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
-        .background(colorScheme == .dark ? Color(white: 0.12) : Color(nsColor: .controlBackgroundColor))
+        .background(colorScheme == .dark ? Color(white: 0.12) : PlatformColors.controlBackground)
         .cornerRadius(6)
     }
 }
@@ -626,7 +630,7 @@ private struct CollapsibleSection<Content: View>: View {
             // Content
             if isExpanded {
                 content()
-                    .background(colorScheme == .dark ? Color(white: 0.12) : Color(nsColor: .controlBackgroundColor).opacity(0.5))
+                    .background(colorScheme == .dark ? Color(white: 0.12) : PlatformColors.controlBackground.opacity(0.5))
             }
         }
         .cornerRadius(10)

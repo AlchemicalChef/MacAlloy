@@ -712,12 +712,51 @@ public final class Parser {
                 error("Expected formula after '=>'")
                 return left
             }
-            left = BinaryFormula(
-                span: SourceSpan(start: leftSpan.start, end: previous.span.end),
-                left: left!,
-                op: .implies,
-                right: right
-            )
+
+            // Check for else clause: cond => then else other
+            // This is equivalent to: (cond => then) && (!cond => other)
+            // Or: (cond && then) || (!cond && other)
+            if match(.else) {
+                guard let elseFormula = parseOrFormula() else {
+                    error("Expected formula after 'else'")
+                    return left
+                }
+                // Create: (cond && then) || (!cond && else)
+                // cond && then
+                let thenPart = BinaryFormula(
+                    span: SourceSpan(start: leftSpan.start, end: right.span.end),
+                    left: left!,
+                    op: .and,
+                    right: right
+                )
+                // !cond
+                let notCond = UnaryFormula(
+                    span: left!.span,
+                    op: .not,
+                    operand: left!
+                )
+                // !cond && else
+                let elsePart = BinaryFormula(
+                    span: SourceSpan(start: left!.span.start, end: elseFormula.span.end),
+                    left: notCond,
+                    op: .and,
+                    right: elseFormula
+                )
+                // (cond && then) || (!cond && else)
+                left = BinaryFormula(
+                    span: SourceSpan(start: leftSpan.start, end: previous.span.end),
+                    left: thenPart,
+                    op: .or,
+                    right: elsePart
+                )
+            } else {
+                left = BinaryFormula(
+                    span: SourceSpan(start: leftSpan.start, end: previous.span.end),
+                    left: left!,
+                    op: .implies,
+                    right: right
+                )
+            }
         }
 
         return left
@@ -968,7 +1007,9 @@ public final class Parser {
                 )
             } else {
                 // Multiplicity formula: some/no/one/lone expr
-                guard let expr = parseExpr() else {
+                // Use parseCardinalityExpr() instead of parseExpr() to avoid consuming
+                // => as part of a conditional expression - the => belongs to formula level
+                guard let expr = parseCardinalityExpr() else {
                     error("Expected expression after multiplicity")
                     return nil
                 }
@@ -1519,10 +1560,25 @@ public final class Parser {
         }
 
         // Multiplicity expressions (used in field types)
+        // Note: For type expressions like `set @this.B`, we need to parse the full
+        // join expression as the operand, so `set @this.B` becomes `set (@this.B)`
         if match(.set) {
-            guard let operand = parseUnaryExpr() else {
+            guard var operand = parseUnaryExpr() else {
                 error("Expected expression after 'set'")
                 return nil
+            }
+            // Handle dot-joins after the operand (e.g., `set @this.B`)
+            while match(.dot) {
+                guard let right = parseUnaryExpr() else {
+                    error("Expected expression after '.'")
+                    break
+                }
+                operand = BinaryExpr(
+                    span: SourceSpan(start: operand.span.start, end: previous.span.end),
+                    left: operand,
+                    op: .join,
+                    right: right
+                )
             }
             return MultExpr(
                 span: SourceSpan(start: startSpan.start, end: previous.span.end),
@@ -1533,9 +1589,22 @@ public final class Parser {
         // Check lookahead BEFORE consuming the token to avoid losing it
         if check(.lone) && !isQuantifiedDecl() {
             advance() // Now safe to consume
-            guard let operand = parseUnaryExpr() else {
+            guard var operand = parseUnaryExpr() else {
                 error("Expected expression after 'lone'")
                 return nil
+            }
+            // Handle dot-joins after the operand
+            while match(.dot) {
+                guard let right = parseUnaryExpr() else {
+                    error("Expected expression after '.'")
+                    break
+                }
+                operand = BinaryExpr(
+                    span: SourceSpan(start: operand.span.start, end: previous.span.end),
+                    left: operand,
+                    op: .join,
+                    right: right
+                )
             }
             return MultExpr(
                 span: SourceSpan(start: startSpan.start, end: previous.span.end),
@@ -1545,9 +1614,22 @@ public final class Parser {
         }
         if check(.one) && !isQuantifiedDecl() {
             advance() // Now safe to consume
-            guard let operand = parseUnaryExpr() else {
+            guard var operand = parseUnaryExpr() else {
                 error("Expected expression after 'one'")
                 return nil
+            }
+            // Handle dot-joins after the operand
+            while match(.dot) {
+                guard let right = parseUnaryExpr() else {
+                    error("Expected expression after '.'")
+                    break
+                }
+                operand = BinaryExpr(
+                    span: SourceSpan(start: operand.span.start, end: previous.span.end),
+                    left: operand,
+                    op: .join,
+                    right: right
+                )
             }
             return MultExpr(
                 span: SourceSpan(start: startSpan.start, end: previous.span.end),
@@ -1557,9 +1639,22 @@ public final class Parser {
         }
         if check(.some) && !isQuantifiedDecl() {
             advance() // Now safe to consume
-            guard let operand = parseUnaryExpr() else {
+            guard var operand = parseUnaryExpr() else {
                 error("Expected expression after 'some'")
                 return nil
+            }
+            // Handle dot-joins after the operand
+            while match(.dot) {
+                guard let right = parseUnaryExpr() else {
+                    error("Expected expression after '.'")
+                    break
+                }
+                operand = BinaryExpr(
+                    span: SourceSpan(start: operand.span.start, end: previous.span.end),
+                    left: operand,
+                    op: .join,
+                    right: right
+                )
             }
             return MultExpr(
                 span: SourceSpan(start: startSpan.start, end: previous.span.end),
@@ -1709,15 +1804,26 @@ public final class Parser {
         // Handles @this, @field, etc.
         if check(.at) {
             let nextIdx = current + 1
-            if nextIdx < tokens.count,
-               case .identifier(let identName) = tokens[nextIdx].kind {
-                advance() // consume @
-                advance() // consume identifier
-                // Store with @ prefix to indicate suppressed expansion
-                return NameExpr(
-                    span: SourceSpan(start: startSpan.start, end: previous.span.end),
-                    name: QualifiedName(single: Identifier(span: previous.span, name: "@\(identName)"))
-                )
+            if nextIdx < tokens.count {
+                // Check for @identifier
+                if case .identifier(let identName) = tokens[nextIdx].kind {
+                    advance() // consume @
+                    advance() // consume identifier
+                    // Store with @ prefix to indicate suppressed expansion
+                    return NameExpr(
+                        span: SourceSpan(start: startSpan.start, end: previous.span.end),
+                        name: QualifiedName(single: Identifier(span: previous.span, name: "@\(identName)"))
+                    )
+                }
+                // Check for @this (this is a keyword, not an identifier)
+                if tokens[nextIdx].kind == .this {
+                    advance() // consume @
+                    advance() // consume this
+                    return NameExpr(
+                        span: SourceSpan(start: startSpan.start, end: previous.span.end),
+                        name: QualifiedName(single: Identifier(span: previous.span, name: "@this"))
+                    )
+                }
             }
         }
 

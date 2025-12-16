@@ -66,8 +66,13 @@ public final class RecentFilesManager: ObservableObject {
         let loadedCount = bookmarks.count
         recentFiles = bookmarks.compactMap { bookmark -> URL? in
             var isStale = false
+            #if os(macOS)
+            let options: URL.BookmarkResolutionOptions = .withSecurityScope
+            #else
+            let options: URL.BookmarkResolutionOptions = []
+            #endif
             guard let url = try? URL(resolvingBookmarkData: bookmark,
-                                     options: .withSecurityScope,
+                                     options: options,
                                      relativeTo: nil,
                                      bookmarkDataIsStale: &isStale) else {
                 return nil
@@ -88,7 +93,12 @@ public final class RecentFilesManager: ObservableObject {
     private func saveRecentFiles() {
         let bookmarks = recentFiles.compactMap { url -> Data? in
             do {
-                return try url.bookmarkData(options: .withSecurityScope,
+                #if os(macOS)
+                let options: URL.BookmarkCreationOptions = .withSecurityScope
+                #else
+                let options: URL.BookmarkCreationOptions = []
+                #endif
+                return try url.bookmarkData(options: options,
                                             includingResourceValuesForKeys: nil,
                                             relativeTo: nil)
             } catch {

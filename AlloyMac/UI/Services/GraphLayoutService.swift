@@ -1,6 +1,11 @@
 import Foundation
 import SwiftUI
+
+#if os(macOS)
 import AppKit
+#elseif os(iOS)
+import UIKit
+#endif
 
 // MARK: - Graph Layout Service
 
@@ -204,12 +209,12 @@ public enum GraphLayoutService {
         return Color(hue: hue, saturation: 0.6, brightness: 0.7)
     }
 
-    /// Generate a consistent NSColor for a signature based on its name
+    /// Generate a consistent native color for a signature based on its name
     /// - Parameter name: The signature name
-    /// - Returns: An NSColor
-    public static func nsColorForSignature(_ name: String) -> NSColor {
+    /// - Returns: A NativeColor (NSColor on macOS, UIColor on iOS)
+    public static func nativeColorForSignature(_ name: String) -> NativeColor {
         let hash = abs(name.hashValue)
         let hue = CGFloat(hash % 360) / 360.0
-        return NSColor(hue: hue, saturation: 0.6, brightness: 0.7, alpha: 1.0)
+        return NativeColor(hue: hue, saturation: 0.6, brightness: 0.7, alpha: 1.0)
     }
 }

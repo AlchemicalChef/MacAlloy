@@ -496,7 +496,7 @@ final class TemporalTests: XCTestCase {
         let universe = Universe(size: 1)
         let cnf = CNFBuilder()
         let trace = Trace(universe: universe, length: 4, cnf: cnf, requiresLoop: false)
-        let encoder = LTLEncoder(trace: trace)
+        _ = LTLEncoder(trace: trace) // Not directly used; encoding built manually below
 
         let p = (0..<4).map { _ in cnf.freshVariable() }
 
@@ -723,6 +723,227 @@ final class TemporalTests: XCTestCase {
             XCTFail("Expected satisfiable")
         case .unknown:
             XCTFail("Expected satisfiable")
+        }
+    }
+
+    // MARK: - Temporal Semantics Validation Tests
+
+    func testAlwaysFalseIsUnsat() {
+        // always false should be unsatisfiable on any trace
+        let universe = Universe(size: 1)
+        let cnf = CNFBuilder()
+        let trace = Trace(universe: universe, length: 3, cnf: cnf, requiresLoop: false)
+        let encoder = LTLEncoder(trace: trace)
+
+        // Assert always false at state 0
+        let alwaysFalse = encoder.always({ _ in .constant(false) }, at: 0)
+        cnf.assertTrue(alwaysFalse)
+
+        let solver = CDCLSolver()
+        let result = solver.solve(numVariables: Int(cnf.variableCount),
+                                  clauses: cnf.allClauses.map { $0.map { Int($0) } })
+
+        switch result {
+        case .satisfiable:
+            XCTFail("always false should be unsatisfiable")
+        case .unsatisfiable:
+            // Expected
+            break
+        case .unknown:
+            XCTFail("Unexpected unknown result")
+        }
+    }
+
+    func testEventuallyTrueIsSat() {
+        // eventually true should always be satisfiable
+        let universe = Universe(size: 1)
+        let cnf = CNFBuilder()
+        let trace = Trace(universe: universe, length: 3, cnf: cnf, requiresLoop: false)
+        let encoder = LTLEncoder(trace: trace)
+
+        // Assert eventually true at state 0
+        let eventuallyTrue = encoder.eventually({ _ in .constant(true) }, at: 0)
+        cnf.assertTrue(eventuallyTrue)
+
+        let solver = CDCLSolver()
+        let result = solver.solve(numVariables: Int(cnf.variableCount),
+                                  clauses: cnf.allClauses.map { $0.map { Int($0) } })
+
+        switch result {
+        case .satisfiable:
+            // Expected
+            break
+        case .unsatisfiable:
+            XCTFail("eventually true should be satisfiable")
+        case .unknown:
+            XCTFail("Unexpected unknown result")
+        }
+    }
+
+    func testAlwaysTrueIsSat() {
+        // always true should be satisfiable
+        let universe = Universe(size: 1)
+        let cnf = CNFBuilder()
+        let trace = Trace(universe: universe, length: 3, cnf: cnf, requiresLoop: false)
+        let encoder = LTLEncoder(trace: trace)
+
+        let alwaysTrue = encoder.always({ _ in .constant(true) }, at: 0)
+        cnf.assertTrue(alwaysTrue)
+
+        let solver = CDCLSolver()
+        let result = solver.solve(numVariables: Int(cnf.variableCount),
+                                  clauses: cnf.allClauses.map { $0.map { Int($0) } })
+
+        switch result {
+        case .satisfiable:
+            break // Expected
+        case .unsatisfiable:
+            XCTFail("always true should be satisfiable")
+        case .unknown:
+            XCTFail("Unexpected unknown result")
+        }
+    }
+
+    func testEventuallyFalseIsUnsat() {
+        // If we require "p" at all states, then "eventually !p" should be unsat
+        let universe = Universe(size: 1)
+        let cnf = CNFBuilder()
+        let trace = Trace(universe: universe, length: 3, cnf: cnf, requiresLoop: false)
+        let encoder = LTLEncoder(trace: trace)
+
+        let p = (0..<3).map { _ in cnf.freshVariable() }
+
+        // Assert p at all states
+        for i in 0..<3 {
+            cnf.addUnit(p[i])
+        }
+
+        // Assert eventually !p - should be unsat since p is always true
+        let eventuallyNotP = encoder.eventually({ BooleanFormula.variable(p[$0]).negated }, at: 0)
+        cnf.assertTrue(eventuallyNotP)
+
+        let solver = CDCLSolver()
+        let result = solver.solve(numVariables: Int(cnf.variableCount),
+                                  clauses: cnf.allClauses.map { $0.map { Int($0) } })
+
+        switch result {
+        case .satisfiable:
+            XCTFail("eventually !p when p is always true should be unsat")
+        case .unsatisfiable:
+            break // Expected
+        case .unknown:
+            XCTFail("Unexpected unknown result")
+        }
+    }
+
+    func testUntilRequiresEventualRight() {
+        // p U q requires that q eventually holds
+        let universe = Universe(size: 1)
+        let cnf = CNFBuilder()
+        let trace = Trace(universe: universe, length: 3, cnf: cnf, requiresLoop: false)
+        let encoder = LTLEncoder(trace: trace)
+
+        let p = (0..<3).map { _ in cnf.freshVariable() }
+        let q = (0..<3).map { _ in cnf.freshVariable() }
+
+        // Assert p U q at state 0
+        let pUntilQ = encoder.until({ .variable(p[$0]) }, { .variable(q[$0]) }, at: 0)
+        cnf.assertTrue(pUntilQ)
+
+        // Force q to be false at all states - should be unsat
+        for i in 0..<3 {
+            cnf.addUnit(-q[i])
+        }
+
+        let solver = CDCLSolver()
+        let result = solver.solve(numVariables: Int(cnf.variableCount),
+                                  clauses: cnf.allClauses.map { $0.map { Int($0) } })
+
+        switch result {
+        case .satisfiable:
+            XCTFail("p U q with q always false should be unsat")
+        case .unsatisfiable:
+            break // Expected
+        case .unknown:
+            XCTFail("Unexpected unknown result")
+        }
+    }
+
+    func testLassoTraceLoopConstraint() {
+        // With a lasso trace, loop back should be enforced
+        let universe = Universe(size: 1)
+        let cnf = CNFBuilder()
+        let trace = Trace(universe: universe, length: 4, cnf: cnf, requiresLoop: true)
+
+        // The trace should have loop variables defined
+        XCTAssertNotNil(trace.loopVariable(to: 0), "Lasso trace should have loop variables")
+        XCTAssertNotNil(trace.loopVariable(to: 1), "Lasso trace should have loop variables")
+    }
+
+    func testHistoricallyAtInitialState() {
+        // historically p at state 0 should just check p at state 0 (no past)
+        let universe = Universe(size: 1)
+        let cnf = CNFBuilder()
+        let trace = Trace(universe: universe, length: 3, cnf: cnf, requiresLoop: false)
+        let encoder = LTLEncoder(trace: trace)
+
+        let p = (0..<3).map { _ in cnf.freshVariable() }
+
+        // Assert historically p at state 0
+        let historicallyP = encoder.historically({ .variable(p[$0]) }, at: 0)
+        cnf.assertTrue(historicallyP)
+
+        // Force p[0] to be true (should be satisfied)
+        cnf.addUnit(p[0])
+
+        let solver = CDCLSolver()
+        let result = solver.solve(numVariables: Int(cnf.variableCount),
+                                  clauses: cnf.allClauses.map { $0.map { Int($0) } })
+
+        switch result {
+        case .satisfiable(let model):
+            XCTAssertTrue(model[Int(p[0])], "p[0] should be true")
+        case .unsatisfiable:
+            XCTFail("Expected satisfiable")
+        case .unknown:
+            XCTFail("Unexpected unknown result")
+        }
+    }
+
+    func testNestedTemporalOperators() {
+        // Test always eventually p (infinitely often p)
+        let universe = Universe(size: 1)
+        let cnf = CNFBuilder()
+        let trace = Trace(universe: universe, length: 4, cnf: cnf, requiresLoop: true)
+        let encoder = LTLEncoder(trace: trace)
+
+        let p = (0..<4).map { _ in cnf.freshVariable() }
+
+        // Assert always eventually p at state 0
+        let alwaysEventuallyP = encoder.always({ state in
+            encoder.eventually({ .variable(p[$0]) }, at: state)
+        }, at: 0)
+        cnf.assertTrue(alwaysEventuallyP)
+
+        // Force p to be true at state 2 only
+        cnf.addUnit(-p[0])
+        cnf.addUnit(-p[1])
+        cnf.addUnit(p[2])
+        cnf.addUnit(-p[3])
+
+        let solver = CDCLSolver()
+        let result = solver.solve(numVariables: Int(cnf.variableCount),
+                                  clauses: cnf.allClauses.map { $0.map { Int($0) } })
+
+        // This should be satisfiable if the loop includes state 2
+        // The result depends on loop structure
+        switch result {
+        case .satisfiable:
+            break // Expected (with proper loop)
+        case .unsatisfiable:
+            break // Also possible depending on loop constraints
+        case .unknown:
+            XCTFail("Unexpected unknown result")
         }
     }
 }

@@ -1,5 +1,10 @@
-import AppKit
 import SwiftUI
+
+#if os(macOS)
+import AppKit
+#elseif os(iOS)
+import UIKit
+#endif
 
 // MARK: - Graph Exporter
 
@@ -89,7 +94,8 @@ public struct GraphExporter {
 
     // MARK: - Save Panel
 
-    /// Show save panel and export the graph
+    #if os(macOS)
+    /// Show save panel and export the graph (macOS)
     /// - Parameters:
     ///   - instance: The instance to export
     ///   - size: The size for export
@@ -126,6 +132,22 @@ public struct GraphExporter {
             }
         }
     }
+    #else
+    /// Export data for sharing (iOS) - returns PDF data for use with share sheet
+    /// - Parameters:
+    ///   - instance: The instance to export
+    ///   - size: The size for export
+    /// - Returns: PDF data that can be shared via UIActivityViewController
+    public static func exportDataForSharing(instance: AlloyInstance, size: CGSize) -> Data? {
+        return exportToPDF(instance: instance, size: size)
+    }
+
+    /// Placeholder for iOS - actual export UI should be handled by SwiftUI's fileExporter or share sheet
+    public static func showExportPanel(instance: AlloyInstance, size: CGSize) {
+        // On iOS, use SwiftUI's .fileExporter() modifier or UIActivityViewController
+        // This is a no-op placeholder; the actual export should be triggered from SwiftUI
+    }
+    #endif
 
     // MARK: - Private Drawing Helpers
 
@@ -133,7 +155,7 @@ public struct GraphExporter {
         let positions = computePositions(for: instance, in: size)
 
         // Draw edges
-        context.setStrokeColor(NSColor.gray.cgColor)
+        context.setStrokeColor(NativeColor.gray.cgColor)
         context.setLineWidth(1.5)
 
         for (fieldName, tuples) in instance.fields {
@@ -167,7 +189,7 @@ public struct GraphExporter {
         }
     }
 
-    private static func drawNode(context: CGContext, at point: CGPoint, name: String, color: NSColor) {
+    private static func drawNode(context: CGContext, at point: CGPoint, name: String, color: NativeColor) {
         let radius: CGFloat = 25
         let rect = CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)
 
@@ -176,7 +198,7 @@ public struct GraphExporter {
         context.fillEllipse(in: rect)
 
         // Stroke
-        context.setStrokeColor(NSColor.white.withAlphaComponent(0.3).cgColor)
+        context.setStrokeColor(NativeColor.white.withAlphaComponent(0.3).cgColor)
         context.setLineWidth(1)
         context.strokeEllipse(in: rect)
 
@@ -209,8 +231,8 @@ public struct GraphExporter {
         context.strokePath()
     }
 
-    private static func drawText(context: CGContext, text: String, at point: CGPoint, color: NSColor, size: CGFloat, centered: Bool = false) {
-        let font = NSFont.systemFont(ofSize: size)
+    private static func drawText(context: CGContext, text: String, at point: CGPoint, color: NativeColor, size: CGFloat, centered: Bool = false) {
+        let font = NativeFont.systemFont(ofSize: size)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: color
@@ -230,10 +252,11 @@ public struct GraphExporter {
 
     // MARK: - SVG Helpers
 
-    private static func svgNode(at point: CGPoint, name: String, color: NSColor) -> String {
-        let r = Int(color.redComponent * 255)
-        let g = Int(color.greenComponent * 255)
-        let b = Int(color.blueComponent * 255)
+    private static func svgNode(at point: CGPoint, name: String, color: NativeColor) -> String {
+        let components = color.rgbComponents
+        let r = Int(components.red * 255)
+        let g = Int(components.green * 255)
+        let b = Int(components.blue * 255)
         let colorStr = "rgb(\(r),\(g),\(b))"
 
         return """
@@ -275,9 +298,10 @@ public struct GraphExporter {
         var y = origin.y + 25
         for sigName in instance.signatures.keys.sorted() {
             let color = colorForSignature(sigName)
-            let r = Int(color.redComponent * 255)
-            let g = Int(color.greenComponent * 255)
-            let b = Int(color.blueComponent * 255)
+            let components = color.rgbComponents
+            let r = Int(components.red * 255)
+            let g = Int(components.green * 255)
+            let b = Int(components.blue * 255)
 
             let cx = Int(origin.x + 6)
             let cy = Int(y - 4)
@@ -326,8 +350,8 @@ public struct GraphExporter {
         GraphLayoutService.computePositions(for: instance, in: size)
     }
 
-    private static func colorForSignature(_ name: String) -> NSColor {
-        GraphLayoutService.nsColorForSignature(name)
+    private static func colorForSignature(_ name: String) -> NativeColor {
+        GraphLayoutService.nativeColorForSignature(name)
     }
 }
 

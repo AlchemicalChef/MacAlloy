@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 
 // MARK: - Squiggle Layout Manager
@@ -160,3 +161,4 @@ extension SquiggleLayoutManager {
         }
     }
 }
+#endif

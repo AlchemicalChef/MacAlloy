@@ -1,5 +1,8 @@
 import SwiftUI
+
+#if os(macOS)
 import AppKit
+#endif
 
 // MARK: - Instance View
 
@@ -13,6 +16,18 @@ public struct InstanceView: View {
     @State private var hiddenSignatures: Set<String> = []
     @State private var hiddenFields: Set<String> = []
     @State private var showFilterPanel: Bool = false
+    #if os(iOS)
+    @State private var isMultiSelectMode: Bool = false
+    #endif
+
+    /// Check if multi-select mode is active (shift key on macOS, toggle on iOS)
+    private var isMultiSelectActive: Bool {
+        #if os(macOS)
+        return NSEvent.modifierFlags.contains(.shift)
+        #else
+        return isMultiSelectMode
+        #endif
+    }
 
     public init(instance: AlloyInstance?) {
         self.instance = instance
@@ -49,7 +64,7 @@ public struct InstanceView: View {
                 // Main graph area
                 ZStack {
                     // Background
-                    Color(nsColor: .windowBackgroundColor)
+                    PlatformColors.windowBackground
                         .ignoresSafeArea()
 
                     // Graph canvas
@@ -150,6 +165,15 @@ public struct InstanceView: View {
 
                             Spacer()
 
+                            #if os(iOS)
+                            // Multi-select toggle for iOS (on macOS, use Shift+Click)
+                            Toggle(isOn: $isMultiSelectMode) {
+                                Label("Multi-select", systemImage: "checklist")
+                            }
+                            .toggleStyle(.button)
+                            .buttonStyle(.bordered)
+                            #endif
+
                             Button(action: { showFilterPanel.toggle() }) {
                                 Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
                             }
@@ -199,7 +223,7 @@ public struct InstanceView: View {
                 // - Shift+Click: Toggle atom in multi-select (add/remove from selection)
                 // - Click on selected atom when it's the only selection: Deselect
                 // - Click on any atom: Select only that atom
-                if NSEvent.modifierFlags.contains(.shift) {
+                if isMultiSelectActive {
                     // Multi-select mode: toggle the atom
                     if selectedAtoms.contains(atomName) {
                         selectedAtoms.remove(atomName)
@@ -221,7 +245,7 @@ public struct InstanceView: View {
         }
 
         // Tapped on empty space - clear selection
-        if !NSEvent.modifierFlags.contains(.shift) {
+        if !isMultiSelectActive {
             selectedAtoms.removeAll()
         }
     }
@@ -356,7 +380,9 @@ public struct InstanceView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
+                    #if os(macOS)
                     .toggleStyle(.checkbox)
+                    #endif
                 }
 
                 if !instance.fields.isEmpty {
@@ -388,7 +414,9 @@ public struct InstanceView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+                        #if os(macOS)
                         .toggleStyle(.checkbox)
+                        #endif
                     }
                 }
 

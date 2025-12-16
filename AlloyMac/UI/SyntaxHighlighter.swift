@@ -1,5 +1,8 @@
 import SwiftUI
+
+#if os(macOS)
 import AppKit
+#endif
 
 // MARK: - Syntax Highlighter
 
@@ -225,7 +228,7 @@ public struct SyntaxTheme {
         stringColor: Color = .green,
         commentColor: Color = .gray,
         delimiterColor: Color = .secondary,
-        backgroundColor: Color = Color(nsColor: .windowBackgroundColor)
+        backgroundColor: Color = PlatformColors.windowBackground
     ) {
         self.font = font
         self.boldFont = boldFont
@@ -273,6 +276,7 @@ public struct SyntaxTheme {
     )
 }
 
+#if os(macOS)
 // MARK: - AppKit Highlighter (for NSTextView)
 
 /// AppKit-based syntax highlighter for use with NSTextView
@@ -458,3 +462,4 @@ public struct AppKitSyntaxTheme {
 
     public static let `default` = AppKitSyntaxTheme()
 }
+#endif

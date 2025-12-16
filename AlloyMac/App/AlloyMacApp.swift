@@ -8,9 +8,11 @@ struct AlloyMacApp: App {
             ContentView()
                 .frame(minWidth: 800, minHeight: 600)
         }
+        #if os(macOS)
         .windowStyle(.automatic)
         .windowToolbarStyle(.unified)
         .defaultSize(width: 1200, height: 800)
+        #endif
         .commands {
             // File Menu
             CommandGroup(replacing: .newItem) {

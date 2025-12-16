@@ -472,7 +472,8 @@ final class TranslatorTests: XCTestCase {
         let scope = CommandScope(defaultScope: 3)
         let context = TranslationContext(symbolTable: symbolTable, scope: scope)
 
-        XCTAssertEqual(context.universe.size, 6) // 3 A + 3 B atoms
+        // Universe includes: 3 A atoms + 3 B atoms + 16 integer atoms (2^4 for default bit width)
+        XCTAssertEqual(context.universe.size, 22)
         XCTAssertNotNil(context.sigMatrix("A"))
         XCTAssertNotNil(context.sigMatrix("B"))
         XCTAssertNotNil(context.fieldMatrix("f"))

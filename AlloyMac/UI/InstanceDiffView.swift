@@ -1,5 +1,8 @@
 import SwiftUI
+
+#if os(macOS)
 import AppKit
+#endif
 
 // MARK: - Instance Comparator
 
@@ -156,31 +159,7 @@ public struct InstanceDiffView: View {
             Divider()
 
             // Main content
-            HSplitView {
-                // Left instance
-                VStack(spacing: 0) {
-                    instanceHeader(title: "Instance \(leftIndex + 1)", isLeft: true)
-                    DiffGraphView(
-                        instance: leftInstance,
-                        diff: diff,
-                        isLeftSide: true,
-                        scale: syncNavigation ? $sharedScale : $leftScale,
-                        offset: syncNavigation ? $sharedOffset : $leftOffset
-                    )
-                }
-
-                // Right instance
-                VStack(spacing: 0) {
-                    instanceHeader(title: "Instance \(rightIndex + 1)", isLeft: false)
-                    DiffGraphView(
-                        instance: rightInstance,
-                        diff: diff,
-                        isLeftSide: false,
-                        scale: syncNavigation ? $sharedScale : $rightScale,
-                        offset: syncNavigation ? $sharedOffset : $rightOffset
-                    )
-                }
-            }
+            splitContentView
             .onChange(of: syncNavigation) { _, newSyncValue in
                 // Transfer values when switching sync mode
                 if newSyncValue {
@@ -205,6 +184,67 @@ public struct InstanceDiffView: View {
                 diffSummaryPanel
             }
         }
+    }
+
+    @ViewBuilder
+    private var splitContentView: some View {
+        #if os(macOS)
+        HSplitView {
+            // Left instance
+            VStack(spacing: 0) {
+                instanceHeader(title: "Instance \(leftIndex + 1)", isLeft: true)
+                DiffGraphView(
+                    instance: leftInstance,
+                    diff: diff,
+                    isLeftSide: true,
+                    scale: syncNavigation ? $sharedScale : $leftScale,
+                    offset: syncNavigation ? $sharedOffset : $leftOffset
+                )
+            }
+
+            // Right instance
+            VStack(spacing: 0) {
+                instanceHeader(title: "Instance \(rightIndex + 1)", isLeft: false)
+                DiffGraphView(
+                    instance: rightInstance,
+                    diff: diff,
+                    isLeftSide: false,
+                    scale: syncNavigation ? $sharedScale : $rightScale,
+                    offset: syncNavigation ? $sharedOffset : $rightOffset
+                )
+            }
+        }
+        #else
+        HStack(spacing: 0) {
+            // Left instance
+            VStack(spacing: 0) {
+                instanceHeader(title: "Instance \(leftIndex + 1)", isLeft: true)
+                DiffGraphView(
+                    instance: leftInstance,
+                    diff: diff,
+                    isLeftSide: true,
+                    scale: syncNavigation ? $sharedScale : $leftScale,
+                    offset: syncNavigation ? $sharedOffset : $leftOffset
+                )
+            }
+            .frame(maxWidth: .infinity)
+
+            Divider()
+
+            // Right instance
+            VStack(spacing: 0) {
+                instanceHeader(title: "Instance \(rightIndex + 1)", isLeft: false)
+                DiffGraphView(
+                    instance: rightInstance,
+                    diff: diff,
+                    isLeftSide: false,
+                    scale: syncNavigation ? $sharedScale : $rightScale,
+                    offset: syncNavigation ? $sharedOffset : $rightOffset
+                )
+            }
+            .frame(maxWidth: .infinity)
+        }
+        #endif
     }
 
     private var controlBar: some View {
@@ -234,13 +274,17 @@ public struct InstanceDiffView: View {
             Toggle(isOn: $syncNavigation) {
                 Label("Sync Navigation", systemImage: "link")
             }
+            #if os(macOS)
             .toggleStyle(.checkbox)
+            #endif
 
             // Show diff panel toggle
             Toggle(isOn: $showDiffPanel) {
                 Label("Diff Panel", systemImage: "list.bullet.rectangle")
             }
+            #if os(macOS)
             .toggleStyle(.checkbox)
+            #endif
 
             // Swap button
             Button(action: {
@@ -285,7 +329,7 @@ public struct InstanceDiffView: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 4)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(PlatformColors.controlBackground)
     }
 
     private var diffSummaryPanel: some View {
@@ -390,7 +434,7 @@ struct DiffGraphView: View {
         GeometryReader { geometry in
             if let instance = instance {
                 ZStack {
-                    Color(nsColor: .windowBackgroundColor)
+                    PlatformColors.windowBackground
                         .ignoresSafeArea()
 
                     Canvas { context, size in

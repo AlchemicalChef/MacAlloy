@@ -1,9 +1,15 @@
 import SwiftUI
+
+#if os(macOS)
 import AppKit
+#elseif os(iOS)
+import UIKit
+#endif
 
 // MARK: - Editor View (with line numbers)
 
-/// Editor view with line number gutter
+#if os(macOS)
+/// Editor view with line number gutter (macOS)
 public struct EditorView: View {
     @Binding var text: String
     var diagnostics: [Diagnostic]
@@ -62,6 +68,58 @@ public struct EditorView: View {
         }
     }
 }
+#else
+/// Editor view with line number gutter (iOS)
+public struct EditorView: View {
+    @Binding var text: String
+    var diagnostics: [Diagnostic]
+    var onTextChange: ((String) -> Void)?
+    var scrollToLocation: SourceSpan?
+    var symbolTable: SymbolTable?
+    var onGoToDefinition: ((SourceSpan) -> Void)?
+    var onFindReferences: ((String, [Reference]) -> Void)?
+    var onRenameSymbol: ((String, [Reference]) -> Void)?
+
+    @State private var scrollOffset: CGFloat = 0
+
+    public init(
+        text: Binding<String>,
+        diagnostics: [Diagnostic] = [],
+        onTextChange: ((String) -> Void)? = nil,
+        scrollToLocation: SourceSpan? = nil,
+        symbolTable: SymbolTable? = nil,
+        onGoToDefinition: ((SourceSpan) -> Void)? = nil,
+        onFindReferences: ((String, [Reference]) -> Void)? = nil,
+        onRenameSymbol: ((String, [Reference]) -> Void)? = nil
+    ) {
+        self._text = text
+        self.diagnostics = diagnostics
+        self.onTextChange = onTextChange
+        self.scrollToLocation = scrollToLocation
+        self.symbolTable = symbolTable
+        self.onGoToDefinition = onGoToDefinition
+        self.onFindReferences = onFindReferences
+        self.onRenameSymbol = onRenameSymbol
+    }
+
+    public var body: some View {
+        HStack(spacing: 0) {
+            // Line number gutter
+            LineNumberGutter(text: text, scrollOffset: scrollOffset)
+
+            // iOS Editor using TextEditor
+            iPadEditorTextView(
+                text: $text,
+                diagnostics: diagnostics,
+                onTextChange: onTextChange,
+                onScrollChange: { offset in
+                    scrollOffset = offset
+                }
+            )
+        }
+    }
+}
+#endif
 
 // MARK: - Line Number Gutter
 
@@ -95,11 +153,12 @@ struct LineNumberGutter: View {
             .offset(y: -scrollOffset)
         }
         .frame(width: 40)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(PlatformColors.controlBackground)
         .clipped()
     }
 }
 
+#if os(macOS)
 // MARK: - Editor Text View (NSViewRepresentable)
 
 /// The actual NSTextView wrapper
@@ -927,9 +986,87 @@ struct EditorTextView: NSViewRepresentable {
         }
     }
 }
+#else
+// MARK: - iPad Editor Text View (UIViewRepresentable)
+
+/// iOS UITextView wrapper for iPad
+struct iPadEditorTextView: UIViewRepresentable {
+    @Binding var text: String
+    var diagnostics: [Diagnostic]
+    var onTextChange: ((String) -> Void)?
+    var onScrollChange: ((CGFloat) -> Void)?
+
+    func makeUIView(context: Context) -> UIScrollView {
+        let textView = UITextView()
+        textView.delegate = context.coordinator
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.autocorrectionType = .no
+        textView.autocapitalizationType = .none
+        textView.smartQuotesType = .no
+        textView.smartDashesType = .no
+        textView.font = .monospacedSystemFont(ofSize: 14, weight: .regular)
+        textView.backgroundColor = .systemBackground
+        textView.text = text
+
+        // Apply initial syntax highlighting
+        applySyntaxHighlighting(to: textView)
+
+        return textView
+    }
+
+    func updateUIView(_ uiView: UIScrollView, context: Context) {
+        guard let textView = uiView as? UITextView else { return }
+
+        // Only update if text changed externally
+        if textView.text != text {
+            let selectedRange = textView.selectedRange
+            textView.text = text
+            applySyntaxHighlighting(to: textView)
+
+            // Try to restore selection
+            if selectedRange.location + selectedRange.length <= text.count {
+                textView.selectedRange = selectedRange
+            }
+        }
+
+        // Notify scroll position
+        onScrollChange?(textView.contentOffset.y)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    private func applySyntaxHighlighting(to textView: UITextView) {
+        // Use UIKitSyntaxHighlighter for syntax highlighting
+        let highlighter = UIKitSyntaxHighlighter()
+        let attributedText = highlighter.highlight(text)
+        textView.attributedText = attributedText
+    }
+
+    class Coordinator: NSObject, UITextViewDelegate {
+        var parent: iPadEditorTextView
+
+        init(_ parent: iPadEditorTextView) {
+            self.parent = parent
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            parent.text = textView.text
+            parent.onTextChange?(textView.text)
+        }
+
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            parent.onScrollChange?(scrollView.contentOffset.y)
+        }
+    }
+}
+#endif
 
 // MARK: - Preview
 
+#if os(macOS)
 struct EditorView_Previews: PreviewProvider {
     static var previews: some View {
         EditorView(
@@ -949,3 +1086,4 @@ struct EditorView_Previews: PreviewProvider {
         )
     }
 }
+#endif
