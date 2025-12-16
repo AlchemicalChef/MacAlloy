@@ -1,8 +1,10 @@
 # MacAlloy
 
-A native macOS IDE for [Alloy 6.2](https://alloytools.org/), a declarative language for modeling and analyzing software systems.
+A native macOS and iPadOS IDE for [Alloy 6.2](https://alloytools.org/), a declarative language for modeling and analyzing software systems.
 
-[![Build](https://github.com/yourusername/MacAlloy/actions/workflows/build.yml/badge.svg)](https://github.com/yourusername/MacAlloy/actions/workflows/build.yml)
+[![Build](https://github.com/AlchemicalChef/MacAlloy/actions/workflows/build.yml/badge.svg)](https://github.com/AlchemicalChef/MacAlloy/actions/workflows/build.yml)
+[![Tests](https://img.shields.io/badge/tests-412%20passing-brightgreen)]()
+[![Platform](https://img.shields.io/badge/platform-macOS%2014%2B%20%7C%20iPadOS%2017%2B-blue)]()
 
 ## Features
 
@@ -41,25 +43,28 @@ The app includes five main views:
 
 ## Requirements
 
-- macOS 14.0+
+- macOS 14.0+ / iPadOS 17.0+
 - Xcode 15.0+
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (for generating the Xcode project)
 
-## Building
+## Installation
+
+Download the latest release from the [Releases](https://github.com/AlchemicalChef/MacAlloy/releases) page, or build from source.
+
+## Building from Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/MacAlloy.git
+git clone https://github.com/AlchemicalChef/MacAlloy.git
 cd MacAlloy
 
-# Install XcodeGen (if not already installed)
-brew install xcodegen
+# Build for macOS
+xcodebuild -scheme AlloyMac -configuration Release -destination 'platform=macOS' build
 
-# Generate the Xcode project
-xcodegen generate
+# Build for iPadOS
+xcodebuild -scheme AlloyMac -configuration Release -destination 'generic/platform=iOS' build
 
-# Build
-xcodebuild -scheme AlloyMac -destination 'platform=macOS' build
+# Run tests
+xcodebuild test -scheme AlloyMac -destination 'platform=macOS'
 ```
 
 ## Architecture
@@ -182,12 +187,14 @@ run CanBecomeHappy for 3 Person, 5 steps
 
 ## Testing
 
-```bash
-# Generate the project first (if not already done)
-xcodegen generate
+The project includes 412 unit tests covering the lexer, parser, semantic analyzer, SAT solver, translator, and temporal logic.
 
-# Run tests
+```bash
+# Run all tests
 xcodebuild test -scheme AlloyMac -destination 'platform=macOS'
+
+# Run specific test class
+xcodebuild test -scheme AlloyMac -destination 'platform=macOS' -only-testing:AlloyMacTests/ParserTests
 ```
 
 ## License
