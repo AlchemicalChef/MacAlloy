@@ -107,6 +107,9 @@ public final class SigDeclNode: DeclNode {
     public let id = ASTNodeID()
     public let span: SourceSpan
 
+    /// Is this declaration private?
+    public var isPrivate: Bool
+
     /// Is this an abstract signature?
     public var isAbstract: Bool
 
@@ -129,6 +132,7 @@ public final class SigDeclNode: DeclNode {
     public var sigFact: BlockFormula?
 
     public init(span: SourceSpan,
+                isPrivate: Bool = false,
                 isAbstract: Bool = false,
                 multiplicity: Multiplicity? = nil,
                 isVariable: Bool = false,
@@ -137,6 +141,7 @@ public final class SigDeclNode: DeclNode {
                 fields: [FieldDeclNode] = [],
                 sigFact: BlockFormula? = nil) {
         self.span = span
+        self.isPrivate = isPrivate
         self.isAbstract = isAbstract
         self.multiplicity = multiplicity
         self.isVariable = isVariable
@@ -156,9 +161,10 @@ public final class SigDeclNode: DeclNode {
     }
 
     public var description: String {
+        let visibility = isPrivate ? "private " : ""
         let prefix = isAbstract ? "abstract " : ""
         let mult = multiplicity.map { "\($0) " } ?? ""
-        return "\(prefix)\(mult)sig \(name ?? "?")"
+        return "\(visibility)\(prefix)\(mult)sig \(name ?? "?")"
     }
 
     public func accept<V: ASTVisitor>(_ visitor: V) -> V.Result {
@@ -218,18 +224,28 @@ public final class FactDeclNode: DeclNode {
     public let id = ASTNodeID()
     public let span: SourceSpan
 
+    /// Is this declaration private?
+    public var isPrivate: Bool
+
     public var factName: Identifier?
     public var body: any FormulaNode
 
-    public init(span: SourceSpan, name: Identifier? = nil, body: any FormulaNode) {
+    public init(span: SourceSpan,
+                isPrivate: Bool = false,
+                name: Identifier? = nil,
+                body: any FormulaNode) {
         self.span = span
+        self.isPrivate = isPrivate
         self.factName = name
         self.body = body
     }
 
     public var name: String? { factName?.name }
     public var children: [any ASTNode] { [body] }
-    public var description: String { "fact \(name ?? "")" }
+    public var description: String {
+        let visibility = isPrivate ? "private " : ""
+        return "\(visibility)fact \(name ?? "")"
+    }
 
     public func accept<V: ASTVisitor>(_ visitor: V) -> V.Result {
         visitor.visit(self)
@@ -256,6 +272,9 @@ public final class PredDeclNode: DeclNode {
     public let id = ASTNodeID()
     public let span: SourceSpan
 
+    /// Is this declaration private?
+    public var isPrivate: Bool
+
     /// For method-style: pred Sig.name
     public var receiver: QualifiedName?
 
@@ -269,11 +288,13 @@ public final class PredDeclNode: DeclNode {
     public var body: (any FormulaNode)?
 
     public init(span: SourceSpan,
+                isPrivate: Bool = false,
                 receiver: QualifiedName? = nil,
                 name: Identifier,
                 params: [ParamDecl] = [],
                 body: (any FormulaNode)? = nil) {
         self.span = span
+        self.isPrivate = isPrivate
         self.receiver = receiver
         self.predName = name
         self.params = params
@@ -289,7 +310,8 @@ public final class PredDeclNode: DeclNode {
 
     public var description: String {
         let recv = receiver.map { "\($0.simpleName)." } ?? ""
-        return "pred \(recv)\(predName.name)"
+        let visibility = isPrivate ? "private " : ""
+        return "\(visibility)pred \(recv)\(predName.name)"
     }
 
     public func accept<V: ASTVisitor>(_ visitor: V) -> V.Result {
@@ -303,6 +325,9 @@ public final class PredDeclNode: DeclNode {
 public final class FunDeclNode: DeclNode {
     public let id = ASTNodeID()
     public let span: SourceSpan
+
+    /// Is this declaration private?
+    public var isPrivate: Bool
 
     /// For method-style: fun Sig.name
     public var receiver: QualifiedName?
@@ -320,12 +345,14 @@ public final class FunDeclNode: DeclNode {
     public var body: (any ExprNode)?
 
     public init(span: SourceSpan,
+                isPrivate: Bool = false,
                 receiver: QualifiedName? = nil,
                 name: Identifier,
                 params: [ParamDecl] = [],
                 returnType: (any ExprNode)? = nil,
                 body: (any ExprNode)? = nil) {
         self.span = span
+        self.isPrivate = isPrivate
         self.receiver = receiver
         self.funName = name
         self.params = params
@@ -344,7 +371,8 @@ public final class FunDeclNode: DeclNode {
 
     public var description: String {
         let recv = receiver.map { "\($0.simpleName)." } ?? ""
-        return "fun \(recv)\(funName.name)"
+        let visibility = isPrivate ? "private " : ""
+        return "\(visibility)fun \(recv)\(funName.name)"
     }
 
     public func accept<V: ASTVisitor>(_ visitor: V) -> V.Result {
@@ -359,18 +387,28 @@ public final class AssertDeclNode: DeclNode {
     public let id = ASTNodeID()
     public let span: SourceSpan
 
+    /// Is this declaration private?
+    public var isPrivate: Bool
+
     public var assertName: Identifier?
     public var body: any FormulaNode
 
-    public init(span: SourceSpan, name: Identifier? = nil, body: any FormulaNode) {
+    public init(span: SourceSpan,
+                isPrivate: Bool = false,
+                name: Identifier? = nil,
+                body: any FormulaNode) {
         self.span = span
+        self.isPrivate = isPrivate
         self.assertName = name
         self.body = body
     }
 
     public var name: String? { assertName?.name }
     public var children: [any ASTNode] { [body] }
-    public var description: String { "assert \(name ?? "")" }
+    public var description: String {
+        let visibility = isPrivate ? "private " : ""
+        return "\(visibility)assert \(name ?? "")"
+    }
 
     public func accept<V: ASTVisitor>(_ visitor: V) -> V.Result {
         visitor.visit(self)
@@ -417,6 +455,17 @@ public struct TypeScope: Sendable {
     }
 }
 
+/// Bitwidth scope for integers
+public struct IntScope: Sendable {
+    public var isExactly: Bool
+    public var bitwidth: Int
+
+    public init(isExactly: Bool = false, bitwidth: Int) {
+        self.isExactly = isExactly
+        self.bitwidth = bitwidth
+    }
+}
+
 /// Scope specification for commands
 public struct CommandScope: Sendable {
     /// Default scope (for N)
@@ -424,6 +473,9 @@ public struct CommandScope: Sendable {
 
     /// Type-specific scopes
     public var typeScopes: [TypeScope]
+
+    /// Integer bitwidth scope
+    public var intScope: IntScope?
 
     /// Temporal steps bound (Alloy 6)
     public var steps: Int?
@@ -433,10 +485,12 @@ public struct CommandScope: Sendable {
 
     public init(defaultScope: Int? = nil,
                 typeScopes: [TypeScope] = [],
+                intScope: IntScope? = nil,
                 steps: Int? = nil,
                 expect: Int? = nil) {
         self.defaultScope = defaultScope
         self.typeScopes = typeScopes
+        self.intScope = intScope
         self.steps = steps
         self.expect = expect
     }

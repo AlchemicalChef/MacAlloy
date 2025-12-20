@@ -24,7 +24,8 @@ public final class AlloyTranslator {
 
     /// Create a translator for a module with given scope
     public init(symbolTable: SymbolTable, scope: CommandScope? = nil) {
-        self.context = TranslationContext(symbolTable: symbolTable, scope: scope)
+        let integerBitWidth = scope?.intScope?.bitwidth ?? AlloyConstants.defaultIntegerBitWidth
+        self.context = TranslationContext(symbolTable: symbolTable, scope: scope, integerBitWidth: integerBitWidth)
         self.exprEncoder = ExpressionEncoder(context: context)
         self.formulaEncoder = FormulaEncoder(context: context, exprEncoder: exprEncoder)
     }

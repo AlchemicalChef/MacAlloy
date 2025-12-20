@@ -119,30 +119,36 @@ public final class Parser {
     // MARK: - Paragraph Parsing
 
     private func parseParagraph() -> (any DeclNode)? {
+        let isPrivate = match(.private)
+
         // Check for sig modifiers first
         if check(.abstract) || check(.one) || check(.lone) || check(.some) ||
            check(.var) || check(.sig) {
-            return parseSigDecl()
+            return parseSigDecl(isPrivate: isPrivate)
         }
 
         switch currentToken.kind {
-        case .fact: return parseFactDecl()
-        case .pred: return parsePredDecl()
-        case .fun: return parseFunDecl()
-        case .assert: return parseAssertDecl()
+        case .fact: return parseFactDecl(isPrivate: isPrivate)
+        case .pred: return parsePredDecl(isPrivate: isPrivate)
+        case .fun: return parseFunDecl(isPrivate: isPrivate)
+        case .assert: return parseAssertDecl(isPrivate: isPrivate)
         case .run: return parseRunCmd()
         case .check: return parseCheckCmd()
         case .enum: return parseEnumDecl()
         default:
-            error("Expected declaration")
+            if isPrivate {
+                error("Expected declaration after 'private'")
+            } else {
+                error("Expected declaration")
+            }
             return nil
         }
     }
 
     // MARK: - Signature Declaration
 
-    private func parseSigDecl() -> SigDeclNode? {
-        let startSpan = currentToken.span
+    private func parseSigDecl(isPrivate: Bool = false) -> SigDeclNode? {
+        let startSpan = isPrivate ? previous.span : currentToken.span
 
         // Parse modifiers
         var isAbstract = false
@@ -231,6 +237,7 @@ public final class Parser {
 
         return SigDeclNode(
             span: SourceSpan(start: startSpan.start, end: previous.span.end),
+            isPrivate: isPrivate,
             isAbstract: isAbstract,
             multiplicity: multiplicity,
             isVariable: isVariable,
@@ -278,9 +285,9 @@ public final class Parser {
 
     // MARK: - Fact Declaration
 
-    private func parseFactDecl() -> FactDeclNode? {
+    private func parseFactDecl(isPrivate: Bool = false) -> FactDeclNode? {
+        let startSpan = isPrivate ? previous.span : currentToken.span
         guard match(.fact) else { return nil }
-        let startSpan = previous.span
 
         // Optional name
         var name: Identifier? = nil
@@ -296,6 +303,7 @@ public final class Parser {
 
         return FactDeclNode(
             span: SourceSpan(start: startSpan.start, end: previous.span.end),
+            isPrivate: isPrivate,
             name: name,
             body: body
         )
@@ -303,9 +311,9 @@ public final class Parser {
 
     // MARK: - Predicate Declaration
 
-    private func parsePredDecl() -> PredDeclNode? {
+    private func parsePredDecl(isPrivate: Bool = false) -> PredDeclNode? {
+        let startSpan = isPrivate ? previous.span : currentToken.span
         guard match(.pred) else { return nil }
-        let startSpan = previous.span
 
         // Parse name (possibly with receiver: Sig.name)
         var receiver: QualifiedName? = nil
@@ -339,6 +347,7 @@ public final class Parser {
 
         return PredDeclNode(
             span: SourceSpan(start: startSpan.start, end: previous.span.end),
+            isPrivate: isPrivate,
             receiver: receiver,
             name: predName,
             params: params,
@@ -348,9 +357,9 @@ public final class Parser {
 
     // MARK: - Function Declaration
 
-    private func parseFunDecl() -> FunDeclNode? {
+    private func parseFunDecl(isPrivate: Bool = false) -> FunDeclNode? {
+        let startSpan = isPrivate ? previous.span : currentToken.span
         guard match(.fun) else { return nil }
-        let startSpan = previous.span
 
         // Parse name (possibly with receiver)
         var receiver: QualifiedName? = nil
@@ -390,6 +399,7 @@ public final class Parser {
 
         return FunDeclNode(
             span: SourceSpan(start: startSpan.start, end: previous.span.end),
+            isPrivate: isPrivate,
             receiver: receiver,
             name: funName,
             params: params,
@@ -400,9 +410,9 @@ public final class Parser {
 
     // MARK: - Assertion Declaration
 
-    private func parseAssertDecl() -> AssertDeclNode? {
+    private func parseAssertDecl(isPrivate: Bool = false) -> AssertDeclNode? {
+        let startSpan = isPrivate ? previous.span : currentToken.span
         guard match(.assert) else { return nil }
-        let startSpan = previous.span
 
         // Optional name
         var name: Identifier? = nil
@@ -418,6 +428,7 @@ public final class Parser {
 
         return AssertDeclNode(
             span: SourceSpan(start: startSpan.start, end: previous.span.end),
+            isPrivate: isPrivate,
             name: name,
             body: body
         )
@@ -542,6 +553,7 @@ public final class Parser {
     private func parseScope() -> CommandScope {
         var defaultScope: Int? = nil
         var typeScopes: [TypeScope] = []
+        var intScope: IntScope? = nil
         var steps: Int? = nil
         var expect: Int? = nil
 
@@ -551,7 +563,9 @@ public final class Parser {
         // First element could be default or typed
         if case .integer(let n) = currentToken.kind {
             advance()
-            if case .identifier = currentToken.kind {
+            if match(.int) {
+                intScope = IntScope(isExactly: initialExactly, bitwidth: n)
+            } else if case .identifier = currentToken.kind {
                 // Typed scope
                 if let typeName = parseQualifiedName() {
                     typeScopes.append(TypeScope(isExactly: initialExactly, count: n, typeName: typeName))
@@ -571,6 +585,8 @@ public final class Parser {
                 // Check for 'steps'
                 if match(.steps) {
                     steps = n
+                } else if match(.int) {
+                    intScope = IntScope(isExactly: isExactly, bitwidth: n)
                 } else if case .identifier = currentToken.kind {
                     if let typeName = parseQualifiedName() {
                         typeScopes.append(TypeScope(isExactly: isExactly, count: n, typeName: typeName))
@@ -590,6 +606,7 @@ public final class Parser {
         return CommandScope(
             defaultScope: defaultScope,
             typeScopes: typeScopes,
+            intScope: intScope,
             steps: steps,
             expect: expect
         )
@@ -1967,7 +1984,7 @@ public final class Parser {
     private func isParagraphStart() -> Bool {
         switch currentToken.kind {
         case .fact, .pred, .fun, .assert, .run, .check, .enum,
-             .sig, .abstract, .one, .lone, .some, .var:
+             .sig, .abstract, .one, .lone, .some, .var, .private:
             return true
         default:
             return false
