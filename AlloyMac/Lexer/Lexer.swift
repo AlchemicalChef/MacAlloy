@@ -95,15 +95,12 @@ public final class Lexer: @unchecked Sendable {
 
         case "=":
             if match(">") { return makeToken(.fatArrow, from: startPosition) }
-            if match("<") { return makeToken(.lessEqual, from: startPosition) }
             return makeToken(.equal, from: startPosition)
 
         case "<":
             if match("=") {
                 if match(">") { return makeToken(.doubleArrow, from: startPosition) }
-                // This was just <= which isn't valid in Alloy, treat as < followed by =
-                retreat() // put back the =
-                return makeToken(.less, from: startPosition)
+                return makeToken(.lessEqual, from: startPosition)
             }
             if match(":") { return makeToken(.leftRestrict, from: startPosition) }
             return makeToken(.less, from: startPosition)

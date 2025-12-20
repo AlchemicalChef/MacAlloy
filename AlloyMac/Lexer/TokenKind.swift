@@ -204,7 +204,7 @@ public enum TokenKind: Equatable, Hashable, Sendable {
     case less
     /// `>`
     case greater
-    /// `=<` (Alloy uses =< not <=)
+    /// `<=`
     case lessEqual
     /// `>=`
     case greaterEqual
@@ -339,7 +339,7 @@ extension TokenKind: CustomStringConvertible {
         case .notEqual: return "!="
         case .less: return "<"
         case .greater: return ">"
-        case .lessEqual: return "=<"
+        case .lessEqual: return "<="
         case .greaterEqual: return ">="
         case .bang: return "!"
         case .doubleAmp: return "&&"
